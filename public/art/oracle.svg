@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 272 218" role="img" aria-labelledby="oracle-title">
+  <title id="oracle-title">Oracle, the masked arena sentinel</title>
+  <defs>
+    <pattern id="screen" width="3.7" height="3.7" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
+      <circle cx=".8" cy=".8" r=".68" fill="#a9a0b9"/>
+    </pattern>
+    <pattern id="etch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(32)">
+      <path d="M0 0v4" stroke="#a39aae" stroke-width=".9"/>
+    </pattern>
+  </defs>
+  <g fill="none" stroke-linecap="round">
+    <path d="m23 117 43-18m-37 26 19-8m-37 16 10-4m18-36 39-17m131-27 30-12m-25 23 15-6m-9 97 22 9m-31-2 18 9" stroke="#a18aba" stroke-width="1.15" opacity=".76"/>
+    <path d="m56 121 12-5m154-70 25-9m-32 27 12-5" stroke="#f4b9ef" stroke-width=".75"/>
+  </g>
+  <g stroke="#1c1925" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M139 108c15 0 29-5 41-14l-3 34 13 21-30 25-33-15z" fill="#2f2c3a" stroke-width="2.4"/>
+    <path d="m140 126 27-14 9-10-3 10-10 10-24 11z M139 135l26-14 9-9-1 7-12 10-23 11z M138 145l24-15 10-8v6l-14 12-22 11z" fill="#827b8d" stroke="none"/>
+    <path d="m105 147 33-7 30 13 22-15 19 7 7 10 25 23q14 13 26 40H39l17-33 22-24z" fill="#35313f" stroke-width="2.8"/>
+    <path d="m57 189-17 29h40l20-13-18-35z" fill="#1e1b28" stroke-width="1.2"/>
+    <path d="m49 211 22-33 12-8-7 15-16 21z" fill="#787081" stroke="none"/>
+    <path d="m64 212 16-21 15-11-3 6-19 23z" fill="url(#etch)" stroke="none"/>
+    <path d="m169 156 25-18 21 12 4 7-10-1-24 12 15-3-19 14-36 21-13 18h-28l14-24z" fill="#575361" stroke-width="1.8"/>
+    <path d="m201 153 16-3 21 18 17 22-18-9-11 3 18 13-19-7-5 5 15 23h-27l-12-22 5-12-17-12z" fill="#484253" stroke-width="2.1"/>
+    <path d="m213 159 12 3 17 15-11-7-15-3-11 6z" fill="#898191" stroke="none"/>
+    <path d="m213 181 13 6-7 3-15-6z" fill="#a99caf" stroke="none"/>
+    <path d="m224 197 13 6 11 15h-17l-7-11-8-5z" fill="url(#etch)" stroke="none"/>
+    <path d="m120 155-43-13-35 7 32 1-24 13 37-8 26 12z" fill="#7a7588" stroke-width="2"/>
+    <path d="m117 159-32-4-35 21 29-8-17 17 28-11 27-7z" fill="#373140" stroke-width="1.9"/>
+    <path d="m106 147 20-9 31 12 8 20-18 23-27 25H93l12-25z" fill="#25232e" stroke-width="2.2"/>
+    <path d="m103 150 20-10 31 10 7 18-26-12-12 2-13 5z" fill="#635c6c" stroke-width="1.4"/>
+    <path d="m108 150 15-7 26 9m7 18-18 18-25 16m39-24-18 17-19 14" fill="none" stroke="#b0a2b9" stroke-width="1.4"/>
+    <path d="M79 83c0-21 15-43 30-54 17-12 32-17 48-14 19 0 31 9 40 21 12 16 14 33 10 51l-11 16-12 2-7 13-20 8-22-9-21-9-13-11-20-4z" fill="#454150" stroke-width="2.8"/>
+    <path d="M85 78c5-19 15-32 29-43 12-8 27-16 42-17-26 10-46 30-53 53z" fill="#a29baa" stroke="none"/>
+    <path d="m99 65 17-24 26-17-18 16 18-9-23 19-7 16z" fill="#676172" stroke="none"/>
+    <path d="M126 65c7-18 24-39 44-45l11 4-13 3 17 1-14 5-26 28z" fill="#696273" stroke="none"/>
+    <path d="m164 42 21-10 12 14 6 19-17 8-13-4-25-9z" fill="#393343" stroke-width="1.3"/>
+    <path d="m177 42 11-6 6 9-8-4-11 5z" fill="#aaa0b5" stroke="none"/>
+    <path d="m191 50 7 7 3 8-11 4-9-2z" fill="url(#screen)" stroke="none"/>
+    <path d="m159 61 9-14 10-6m-1-7-12 7-13 15M90 70l10-19 13-15m-7 23 9-14m-5 16 11-17m7-8 10-7" fill="none" stroke="#c4bbcc" stroke-width="1.05"/>
+    <path d="m106 67 24-33 27-24 28-8-29 25-25 32-12 12z" fill="#6b6379" stroke-width="2.1"/>
+    <path d="m114 63 18-26 27-24 12-5-21 21-24 31z" fill="#c4b8cb" stroke="none"/>
+    <path d="m68 88 17-13 26-10 27-4 22 5 13-6 28 8-9 8-20 7-16-6-20 10-44 9-15-2z" fill="#6e667c" stroke-width="2.5"/>
+    <path d="m69 88 24-9 31-9 19-4 11 3-17 2-26 7-25 9z" fill="#c8bfce" stroke="none"/>
+    <path d="m81 92 25-8 41-14 14 6-15 13-22 10-32 1-17-3z" fill="#201d2b" stroke-width="2"/>
+    <path d="m84 92 29-8 30-10 15 2-19 6-17 9-23 6-15-1z" fill="#6a4569" stroke="none"/>
+    <path d="m83 94 29-7 34-11 9 1-23 8-12 7-25 4z" fill="#ff85cf" stroke="none"/>
+    <path d="m89 94 24-6 22-7-15 8-23 6z" fill="#ffdcf1" stroke="none"/>
+    <path d="m147 88 12-9 10 5-2 10-10 5-11-3z" fill="#9990a1" stroke-width="1.4"/>
+    <path d="m154 88 6-4 6 2-2 6-6 2-4-2z" fill="#51485c" stroke-width="1"/>
+    <path d="m157 87 5-1 2 2-3 3-4-1z" fill="#e9badf" stroke="none"/>
+    <path d="m87 98 11 3 27-6 15-7 11 6 13 9-8 13-16 9-15 12-14-5-7-9-10-5-3-9-7-4z" fill="#5b5364" stroke-width="2.5"/>
+    <path d="m85 99 16 4 24-6-14 10-14 3-8-6z" fill="#a79cae" stroke="none"/>
+    <path d="m112 109 17-12 11-6 8 6-16 6-12 10z" fill="#7e7587" stroke="none"/>
+    <path d="m94 111 11 5 12-2 11-8 16-6-17 12-7 7-12 4-7-6-6-2z" fill="#34303f" stroke-width="1.2"/>
+    <path d="m109 125 12-4 12-11 17-10 6 4-16 10-14 13-13 5z" fill="#aca0b2" stroke-width="1.3"/>
+    <path d="m115 131 12-6 12-10 13-7-14 14-13 12z" fill="#56505e" stroke="none"/>
+    <path d="m128 101 11-7m-7 15 11-8m-5 16 12-8m-26 20 9-6m-29-7 9-3m-7 6 11-4" fill="none" stroke="#ded4de" stroke-width="1.1"/>
+    <path d="m161 98 7-14 11-6 16-5-3 12-7 11-6 17-12 9-9-1 10-13z" fill="#37313f" stroke-width="1.7"/>
+    <path d="m175 87 13-8-5 12-8 8 3-9-6 3z" fill="#867d91" stroke="none"/>
+    <path d="m192 91 14-13-2 17-15 21-9 1 3-11z" fill="#71697e" stroke-width="2"/>
+    <path d="m194 94 7-9-2 10-9 14z" fill="#bbb0c3" stroke="none"/>
+    <path d="m167 128 8-7 5 5-8 10-5 1z" fill="#8f849b" stroke-width="1.2"/>
+    <path d="m139 169 4-5 7 3-5 5z" fill="#d68bbb" stroke="none"/>
+    <path d="m172 189-17 14-10 15m-9-16-16 16m70-42 10-8m9-6 7-3" fill="none" stroke="#b8afc2" stroke-width="1.5"/>
+  </g>
+</svg>

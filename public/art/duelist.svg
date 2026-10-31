@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 272 218" role="img" aria-labelledby="duelist-title">
+  <title id="duelist-title">The silver-haired rift duelist</title>
+  <defs>
+    <pattern id="skin-print" width="3.4" height="3.4" patternUnits="userSpaceOnUse" patternTransform="rotate(-17)">
+      <circle cx="0.7" cy="0.7" r="0.65" fill="#403b4d"/>
+    </pattern>
+    <pattern id="cloth-print" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(27)">
+      <path d="M0 0v4" stroke="#d0c5ef" stroke-opacity=".55"/>
+    </pattern>
+  </defs>
+  <g fill="none" stroke-linecap="round">
+    <path d="m27 105 35-19m-28 28 28-15m-47 15 13-6m13-23 25-13m135-20 40-16m-30 25 21-8m-5 14 16-5m-7 55 16 7" stroke="#a594da" stroke-width="1.25" opacity=".7"/>
+    <path d="m33 129 18-10m173-65 27-11m-31 42 33-7" stroke="#eee5ff" stroke-width=".6" opacity=".64"/>
+  </g>
+  <g stroke="#191823" stroke-linejoin="round" stroke-linecap="round">
+    <path d="m163 38 52 2-19 15 28-1-20 15 24 2-24 16 25 7-30 8 21 16-25-1 7 19-22-6 2 15-19-11-19 4-10-18-13-54z" fill="#aca6bb" stroke-width="2.8"/>
+    <path d="m155 99 19-9c-3 19-1 38 5 49l22 19-39 36-40-19-4-26 11-12 3-19z" fill="#e7e0dd" stroke-width="2.1"/>
+    <path d="M134 116q22-4 34-18l-3 24-21 26-17 6z" fill="#918c9e" stroke="none"/>
+    <path d="M133 122q14-5 24-12l-21 20-7 20z" fill="url(#skin-print)" stroke="none"/>
+    <path d="M125 150c-19 6-39 9-51 19-10 8-19 18-26 30L38 218h228c-5-17-18-32-37-44l-36-22-11-13z" fill="#24232f" stroke-width="2.8"/>
+    <path d="M70 180c20-12 32-14 47-15l20 22-24 31H62l10-23-21 23H40z" fill="#575161" stroke-width="1.2"/>
+    <path d="m65 217 18-34 19-9-16 28 29-23-18 31 17-7-7 15z" fill="#33303d" stroke="none"/>
+    <path d="M194 155c11 8 20 12 33 18l-5 5-23-8 16 16-10 11-22-22-24 27-9-5 17-33z" fill="#43404e" stroke="none"/>
+    <path d="m214 177 17 2 20 16-21-8 20 16-17-8 14 14-28-19-11-2z" fill="url(#cloth-print)" stroke="none"/>
+    <path d="M186 190q-15 12-23 28m-3-19-15 19m52-34 13 10 12 24m-140-26-11 21m20-27-10 17m20-24-10 17" fill="none" stroke="#aba3b4" stroke-width="1.3"/>
+    <path d="M95 54c9-18 24-30 50-31 21 0 39 14 45 36l-5 25-9 14-16 12c-5 7-10 10-17 16l-23 13c-6 2-10 0-12-5l-3-11-4-4 2-6-7-3 1-9-12-3c-3-1-3-3-1-5l12-16-3-8z" fill="#f1eae5" stroke-width="2.35"/>
+    <path d="m109 74 11-12 20-10-10 19-12 13 9-4-9 9-9 6 6-10-13 2z" fill="#c7c0cc" stroke="none"/>
+    <path d="m97 92-7 3 6 1 7-3z" fill="#8a8395" stroke="none"/>
+    <path d="M114 127c11-2 22-10 34-21l9-19 12-6 1 19-13 16-14 11-23 12c-6 2-10 0-12-5z" fill="#c2b9c6" stroke="none"/>
+    <path d="M130 125c12-8 19-17 25-24l8-5-5 13-17 15-22 11z" fill="url(#skin-print)" stroke="none"/>
+    <path d="M163 75c9-7 17-5 16 4-1 10-6 18-17 21l-4-2" fill="#e8dedf" stroke-width="2"/>
+    <path d="M164 88c0-6 4-11 9-12 2 0 3 2 2 4l-5 4-1 6-5 3m6-9-3 1" fill="none" stroke="#6d6678" stroke-width="1.45"/>
+    <path d="M86 98q5 0 10 2l4-2m-2 12 6-3 7 1m-12 5 9-1m-2 6 5-2m2 14 8-3" fill="none" stroke-width="1.5"/>
+    <path d="M70 65q11-14 25-22l-16 3q17-17 38-26l-19 2q18-12 40-16l-10-4q18-1 31 5l4-7 8 9q20-5 43-2l-16 8 21-1-17 11q20-1 36-5l-13 13-13 6 29-4-17 15-13 8 24-2-19 15 22-1-31 17 18 1-16 9 11 7-19 3 8 10-18-3 3 10-16-8-7-13 3-14-13 16 2-21-17 20 7-29-21 17 9-25-18 13 8-19-20 15 9-18-22 12 7-14-16 10z" fill="#f2eef2" stroke-width="2.65"/>
+    <path d="M83 59q17-17 45-29L99 53l-13 15 9-15zm26 1 24-23-10 16-21 19zm29-16c12-17 22-22 34-30l-23 23-14 20zm24-3 26-23-12 18-21 24zm15 17 24-21-9 13-24 22zm12 12 21-13-15 15-15 11z" fill="#c6c0cf" stroke="none"/>
+    <path d="m131 77 18-22-9 23-13 11zm12 18 18-27-6 25 15-17-8 25 14-12-3 17 11 12-10-22-9 9-5-12-11 9z" fill="#928b9f" stroke="none"/>
+    <path d="m187 83 29-15-16 15 17 1-23 8 14 3-17 4 14 10-16-5c-2-8-2-13-2-21z" fill="#aaa3b6" stroke="none"/>
+    <g fill="none" stroke-width="1.05">
+      <path d="M83 50q21-16 45-26m-9-4 22-9m-39 46q15-17 37-29m-2-10 16-8m-35 45 22-21m5-2 13-13m-12 24 21-17m13-11 18-6m-20 23 17-13m-19 32 25-20m-2 25 15-9m-21 26 10-6m-6 25 8 4" stroke="#787283"/>
+      <path d="m154 55 16-20m8-10 14-7m-15 40 13-12m-9 31 12-10m10-29 11-6" stroke="#aca1c0"/>
+    </g>
+    <path d="M87 55c-7 8-12 15-14 23l12-7-5 12 14-11-8 11c7-6 15-16 18-23l-7 7 7-14" fill="#e6e0eb" stroke-width="1.65"/>
+    <path d="m89 65 9-12m-14 24 11-10" fill="none" stroke="#96909f" stroke-width="1"/>
+    <path d="M97 85q7-8 18-9l9-2-10 11-11 1z" fill="#faf7f2" stroke-width="1.05"/>
+    <path d="M98 84c7-7 17-8 27-12l-4 4c-9 2-16 5-23 9z" fill="#22212c" stroke="none"/>
+    <path d="M103 81c0 5 5 6 8 1l1-4z" fill="#514565" stroke-width=".9"/>
+    <circle cx="106.3" cy="80.7" r=".9" fill="#f9f3fa" stroke="none"/>
+    <path d="m99 78 10-6 16-5-7 6-10 3z" fill="#37313f" stroke="none"/>
+    <path d="M105 88l8-3m5-3 6-4m-3 5 7-5" fill="none" stroke="#827b8d" stroke-width=".75"/>
+    <path d="m128 157 8-18 23 5 25-26 20 26-6 22-35 18-24 30-22 4-3-18z" fill="#312e3e" stroke-width="2.45"/>
+    <path d="m138 146 20 9 26-32 12 19-6 14-30 20-26 32 13-34z" fill="#514b60" stroke="none"/>
+    <path d="M114 151c-8-3-15-9-21-17l3 29 20 35 11 16 8-12 9-36z" fill="#393544" stroke-width="2.8"/>
+    <path d="m95 138 17 16 29 13-8 7-21-10-13-13z" fill="#726a7e" stroke="none"/>
+    <path d="m104 151 9 8 26 12m1-23 18 9 26-30m-5 54-21 17-14 20" fill="none" stroke="#c4b4de" stroke-width="1.4"/>
+    <path d="m135 193 11-20 13 6-13 22z" fill="#191821" stroke-width="1.6"/>
+    <path d="m140 192 7-13 6 2-8 13z" fill="none" stroke="#bbaed4" stroke-width="1.8"/>
+    <path d="m194 169 10-7 9 6-12 7z" fill="#a99abe" stroke="none"/>
+  </g>
+</svg>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111015">
+  <meta name="description" content="An anime chess duel with six limited-use techniques, a tactical bot and online rooms.">
+  <title>Riftbound · Chess 2.0</title>
+  <link rel="icon" href="./favicon.svg">
+  <link rel="stylesheet" href="./arena.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-inner">
+      <a class="brand" href="./arena.html" aria-label="Riftbound home">
+        <svg aria-hidden="true"><use href="./art/ui.svg#rift"/></svg>
+        <span>RIFTBOUND</span><b>CHESS 2.0</b>
+      </a>
+      <nav aria-label="Main">
+        <button id="nav-arena" class="nav-link active"><svg aria-hidden="true"><use href="./art/ui.svg#arena"/></svg>Arena</button>
+        <button id="nav-codex" class="nav-link"><svg aria-hidden="true"><use href="./art/ui.svg#book"/></svg>Technique codex</button>
+      </nav>
+      <div class="top-actions">
+        <button id="rules-top" class="rules-link"><svg aria-hidden="true"><use href="./art/ui.svg#info"/></svg>How to play</button>
+        <span class="divider"></span>
+        <button id="sound" class="icon-btn" aria-label="Enable sound effects" title="Enable sound effects"><svg aria-hidden="true"><use href="./art/ui.svg#mute"/></svg></button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="intro">
+      <div>
+        <div class="eyebrow"><span class="line"></span>TACTICAL CHESS <span class="slash">//</span> SERIES 01</div>
+        <h1>Duel Arena<span>.</span></h1>
+        <p>Classic chess with a supernatural edge.</p>
+      </div>
+      <div class="intro-actions">
+        <button class="secondary" id="friend"><svg aria-hidden="true"><use href="./art/ui.svg#friend"/></svg>Play a friend</button>
+        <button class="primary" id="new"><svg aria-hidden="true"><use href="./art/ui.svg#plus"/></svg>New duel</button>
+      </div>
+    </div>
+    <div class="arena-layout">
+      <section class="battle" aria-label="Chess arena">
+        <div class="boardbar">
+          <div><i class="live-dot"></i><span>LIVE BOARD</span><span class="bar-slash">/</span><span class="board-mode" id="board-mode">BOT DUEL</span></div>
+          <button id="flip" class="mini-btn" title="Flip board" aria-label="Flip board"><svg aria-hidden="true"><use href="./art/ui.svg#flip"/></svg><span>Flip</span></button>
+        </div>
+        <div id="north" class="player north"></div>
+        <div class="board-frame">
+          <div id="board" class="board" role="group" aria-label="Chessboard"></div>
+          <div id="files" class="files" aria-hidden="true"></div><div id="ranks" class="ranks" aria-hidden="true"></div>
+          <div class="corner tl"></div><div class="corner br"></div>
+        </div>
+        <div id="south" class="player south"></div>
+        <div id="status" class="status" role="status" aria-live="polite"><svg aria-hidden="true"><use href="./art/ui.svg#crosshair"/></svg><span>Select a piece to see its legal moves.</span></div>
+      </section>
+      <aside class="console" aria-label="Duel controls">
+        <section class="profile">
+          <div class="profile-lines"></div><div class="profile-halo"></div>
+          <img id="opponent-art" src="./art/oracle.svg" alt="" class="profile-art">
+          <div class="profile-content">
+            <div class="profile-kicker"><span></span>OPPONENT FILE</div>
+            <h2 id="profile-name">The Oracle</h2><div id="profile-badge" class="profile-badge">TACTICAL BOT</div>
+          </div>
+          <div class="profile-foot"><span><i class="live-dot"></i><span id="profile-type">AI opponent</span></span><span id="profile-level">Apex level</span></div>
+        </section>
+        <section class="tech panel">
+          <header class="panel-heading">
+            <div><svg aria-hidden="true" class="violet"><use href="./art/ui.svg#bolt"/></svg><h2>Technique deck</h2></div>
+            <button aria-label="Open technique codex" title="Open technique codex" id="deck-info" class="sub-icon"><svg aria-hidden="true"><use href="./art/ui.svg#info"/></svg></button>
+          </header>
+          <div class="tech-body">
+            <div class="tech-tabs" id="tech-tabs" aria-label="Browse piece techniques"></div>
+            <div class="tech-detail">
+              <span class="tech-index" id="tech-index">TECHNIQUE 02 / 06</span><h3 id="tech-name">Rift Jump</h3>
+              <p id="tech-text"></p><div class="tech-meta" id="tech-meta"></div>
+            </div>
+            <button id="power-btn" class="cast-btn"><svg aria-hidden="true"><use href="./art/ui.svg#bolt"/></svg><span>Arm technique</span><svg aria-hidden="true"><use href="./art/ui.svg#arrow"/></svg></button>
+          </div>
+        </section>
+        <section class="log panel">
+          <header class="panel-heading"><div><svg aria-hidden="true"><use href="./art/ui.svg#log"/></svg><h2>Move log</h2></div><span class="count" id="log-count">00</span></header>
+          <div id="log-body" class="log-body"></div>
+        </section>
+        <div id="room-tools" hidden class="room-tools panel">
+          <span id="room-tool-label"></span><button id="room-copy" class="secondary">Copy invite</button><button id="resign" class="text-btn">Resign</button>
+        </div>
+      </aside>
+    </div>
+    <footer><span>RIFTBOUND <b>/</b> CHESS 2.0</span><span>RULESET v1.0</span></footer>
+  </main>
+  <dialog id="modal">
+    <div class="dialog-inner">
+      <button id="modal-close" aria-label="Close dialog" class="close"><svg aria-hidden="true"><use href="./art/ui.svg#cross"/></svg></button>
+      <div id="modal-body"></div>
+    </div>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript>This game needs JavaScript to run the board and chess engine.</noscript>
+  <script type="module" src="./game/arena.js"></script>
+</body>
+</html>

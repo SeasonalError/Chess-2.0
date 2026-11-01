@@ -42,7 +42,7 @@ export function createEncounterPanel(panel, {counter, ready, tap}) {
   function write(key, value) {
     if (nodes[key] && nodes[key].textContent !== value) nodes[key].textContent = value;
   }
-  return function draw(encounter, side, remainingCounters, square, now, busy, pendingTaps = 0, targetName = 'piece') {
+  return function draw(encounter, side, remainingCounters, square, now, busy, pendingTaps = 0, targetName = 'piece', casterName = 'queen') {
     panel.hidden = !encounter;
     if (!encounter) { currentKey = ''; return; }
     const {id, phase, caster} = encounter;
@@ -85,8 +85,8 @@ export function createEncounterPanel(panel, {counter, ready, tap}) {
     write('kicker', 'ROYAL TRIBUNAL / ' + (attacking ? 'ATTACKER' : 'DEFENDER'));
     write('title', waiting ? 'Ready for the tribunal?' : beforeStart ? 'Prepare to strike' :
       finished ? 'Resolving the tribunal' : 'Strike for 10 seconds');
-    const stakes = attacking ? 'Win to take the ' + targetName + ' on ' + coord(encounter.to) + '. Lose and your queen falls.' :
-      'Win to save your ' + targetName + ' on ' + coord(encounter.to) + ' and destroy the attacking queen.';
+    const stakes = attacking ? 'Win to take the ' + targetName + ' on ' + coord(encounter.to) + '. Lose and your ' + casterName + ' falls.' :
+      'Win to save your ' + targetName + ' on ' + coord(encounter.to) + ' and destroy the attacking ' + casterName + '.';
     write('help', waiting ? stakes : beforeStart ? 'The duel begins together for both players.' :
       finished ? 'Waiting for the final score.' : 'Tap the button, or press and release Enter or Space.');
     if (waiting) {

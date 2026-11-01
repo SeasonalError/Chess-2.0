@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111015">
-  <meta name="description" content="An anime chess duel with limited-use techniques, hidden casts, counter predictions, and the Royal Tribunal.">
+  <meta name="description" content="Choose a secret wildcard, counter supernatural chess techniques, and challenge a friend or a tactical bot.">
   <title>Riftbound · Chess 2.0</title>
   <link rel="icon" href="./favicon.svg">
   <link rel="stylesheet" href="./arena.css">
@@ -45,6 +45,7 @@
           <div><i class="live-dot"></i><span>LIVE BOARD</span><span class="bar-slash">/</span><span class="board-mode" id="board-mode">BOT DUEL</span></div>
           <button id="flip" class="mini-btn" title="Flip board" aria-label="Flip board"><svg aria-hidden="true"><use href="./art/ui.svg#flip"/></svg><span>Flip</span></button>
         </div>
+        <section id="draft-panel" class="draft-panel" aria-label="Wildcard draft" tabindex="-1" hidden></section>
         <section id="encounter-panel" class="encounter panel" aria-label="Technique encounter" tabindex="-1" hidden></section>
         <div id="north" class="player north"></div>
         <div class="board-frame">
@@ -79,6 +80,7 @@
             <button id="power-btn" class="cast-btn"><svg aria-hidden="true"><use href="./art/ui.svg#bolt"/></svg><span>Arm technique</span><svg aria-hidden="true"><use href="./art/ui.svg#arrow"/></svg></button>
           </div>
         </section>
+        <section id="wildcard-panel" class="wildcard-panel panel" aria-label="Your wildcard" hidden></section>
         <section class="log panel">
           <header class="panel-heading"><div><svg aria-hidden="true"><use href="./art/ui.svg#log"/></svg><h2>Move log</h2></div><span class="count" id="log-count">00</span></header>
           <div id="log-body" class="log-body"></div>
@@ -88,7 +90,7 @@
         </div>
       </aside>
     </div>
-    <footer><span>RIFTBOUND <b>/</b> CHESS 2.0</span><span>RULESET v1.1</span></footer>
+    <footer><span>RIFTBOUND <b>/</b> CHESS 2.0</span><span>RULESET v1.2</span></footer>
   </main>
   <dialog id="modal">
     <div class="dialog-inner">

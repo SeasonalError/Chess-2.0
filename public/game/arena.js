@@ -1,13 +1,14 @@
 import {
-  initialState, legalMoves, coord, POWERS, inCheck,
+  initialState, legalMoves, coord, POWERS, WILDCARDS, powerAt, wildcardMoves, inCheck,
 } from './engine.js';
 
 import {
-  createMatch, moveMatch, counterMatch, readyMatch, tapMatch, advanceMatch, viewMatch,
+  createMatch, createDraftMatch, draftMatch, moveMatch, counterMatch, readyMatch, tapMatch, advanceMatch, viewMatch,
   COUNTER_MS, MAX_BATCH,
 } from './encounter.js';
-import {chooseCounterSquare, duelTapSchedule} from './bot.js';
+import {chooseCounterSquare, chooseDraftCard, duelTapSchedule} from './bot.js';
 import {createEncounterPanel} from './arena-encounter-ui.js';
+import {createWildcardPanels, wildcardInstruction} from './arena-wildcards-ui.js';
 
 const el = id => document.getElementById(id);
 const names = {p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King'};
@@ -35,7 +36,8 @@ let room = null, token = '', selected = null, armed = false, technique = 'n', fl
 let worker = null, job = 0, botError = false, busy = false, pollBusy = false, offline = false;
 let sound = !!storage.read('sound'), audio = null, flash = null, flashTimer, toastTimer;
 let roomEpoch = 0, roving = 52;
-let solo = createMatch(game), encounter = null, prediction = null, botPlan = null;
+let draft = null, draftChoice = null, cardArmed = false, cardMoves = [];
+let solo = createDraftMatch(game), encounter = null, prediction = null, botPlan = null;
 let clockOffset = 0, lastPollAt = 0, tapQueue = null;
 const opponent = color => color === 'w' ? 'b' : 'w';
 const clock = () => Date.now() + (mode === 'room' ? clockOffset : 0);
@@ -43,6 +45,14 @@ const encounterPanel = createEncounterPanel(el('encounter-panel'), {
   counter: pass => answerEncounter(pass ? null : prediction),
   ready: () => answerEncounter('ready'),
   tap: strike,
+});
+
+const wildPanels = createWildcardPanels(el('draft-panel'), el('wildcard-panel'), {
+  preview: id => {
+    if (!draft || draft.phase !== 'picking' || draft.picked[side] || busy || !Object.hasOwn(WILDCARDS,id)) return;
+    draftChoice = id; drawWildcards();
+  },
+  lock: lockDraft, arm: armWildcard,
 });
 
 function toast(message) {
@@ -87,11 +97,11 @@ modal.addEventListener('click', event => {
 function selectRules() {
   show('Rules of the rift',
     '<p class="dialog-text">Checkmate wins. Your pieces move as in chess until you spend a charge.</p>' +
-    '<ul class="rules-list"><li>Each side starts with <b>three charges for the entire duel</b>. Each piece type can cast its technique once across your army.</li>' +
+    '<ul class="rules-list"><li>Before a new duel, privately choose one of six wildcards. A wildcard costs one full turn and zero charges. Use it once when your king is safe. Cards resolve directly and do not reset your technique cooldown.</li><li>Each side starts with <b>three charges for the entire duel</b>. Each technique can be cast once across your army, including after a Power Trade.</li>' +
     '<li>A technique takes your entire turn. Play a normal move before casting again. Royal Tribunal and Domain Expansion cost two charges. The other techniques cost one.</li>' +
-    '<li>Select a piece for normal moves. To cast, choose its type in the deck, arm the technique, then choose a highlighted piece and destination. For Domain Expansion, choose the king’s own square.</li>' +
+    '<li>Select a piece for normal moves. To cast, choose its type in the deck, arm the technique, then choose a highlighted piece and destination. For Domain Expansion, choose the caster’s own square. Power Trade swaps two allies’ techniques privately. Their ordinary moves stay the same, and each borrowed technique follows its carrier.</li>' +
     '<li>A cast sends a sealed signal. The defender has 15 seconds to predict any one destination square. A correct prediction cancels the cast. Each side has two counter seals per game. Passing or timing out saves the seal. A canceled cast still spends the caster’s charge, technique and turn.</li>' +
-    '<li>Royal Tribunal challenges an enemy non-king up to four squares along the queen’s rank or file, through intervening pieces. If the challenge lands, ready up and tap for ten seconds. More taps for the attacker removes the target. A defender win or tie removes the attacking queen.</li>' +
+    '<li>Royal Tribunal challenges an enemy non-king up to four squares along the queen’s rank or file, through intervening pieces. If the challenge lands, ready up and tap for ten seconds. More taps for the attacker removes the target. A defender win or tie removes the casting piece.</li>' +
     '<li>Aegis guards an allied non-king up to three squares along the rook’s rank or file through intervening pieces. The guard lasts for the enemy reply. The rook stays on its square.</li>' +
     '<li>Check uses ordinary chess attacks. You must escape check with a normal move. Castling, en passant and all four promotions are available.</li>' +
     '<li>Stalemate, threefold repetition, fifty moves by each side without a pawn move or capture, and insufficient mating material draw automatically.</li></ul>' +
@@ -106,7 +116,10 @@ function selectCodex() {
     '<div><b>' + power.name + '</b><small>' + names[type].toUpperCase() + ' · ' + power.cost +
     ' CHG</small><p>' + power.description + '</p></div></div>');
   show('Technique codex', '<p class="dialog-text">Six techniques, three charges and two counter seals per side. All casts can be interrupted by predicting their target square.</p>' +
-    '<div class="codex-list">' + entries.join('') + '</div>', 'FIELD MANUAL / 02');
+    '<div class="codex-list">' + entries.join('') + '</div><h3 class="dialog-title">Wildcards</h3>' +
+    '<p class="dialog-text">Choose one privately before play. Each card costs a turn and can be played once.</p><div class="codex-list">' +
+    Object.entries(WILDCARDS).map(([id, card]) => '<div class="codex-item" data-card="' + id + '"><svg aria-hidden="true" viewBox="0 0 64 64"><use href="./art/cards.svg#' +
+      id + '"/></svg><div><b>' + card.name + '</b><p>' + card.description + '</p></div></div>').join('') + '</div>', 'FIELD MANUAL / 02');
 }
 function selectNew() {
   const options = Object.entries(levels).map(([value, name]) =>
@@ -127,25 +140,26 @@ function stopWorker() {
   worker = null;
   botError = false;
 }
-function resetSelection() { selected = null; armed = false; }
+function resetSelection() { selected = null; armed = false; cardArmed = false; }
 function saveSolo() {
   if (mode === 'bot') storage.write('solo', {match:solo, side, level, botPlan});
 }
 function mine() {
-  return !encounter && !busy && !outcome && side === game.turn && (mode === 'bot' || room?.ready);
+  return draft?.phase !== 'picking' && !encounter && !busy && !outcome && side === game.turn && (mode === 'bot' || room?.ready);
 }
 function refreshGame() {
-  moves = encounter || outcome ? [] : legalMoves(game);
+  moves = encounter || outcome || draft?.phase === 'picking' ? [] : legalMoves(game);
+  cardMoves = activeCard() && !encounter && !outcome && side === game.turn ? wildcardMoves(game, draft.card) : [];
   render();
 }
 function newBot(color, difficulty) {
   stopWorker();
   roomEpoch++;
   mode = 'bot'; room = null; token = ''; busy = false; offline = false;
-  game = initialState(); solo = createMatch(game); encounter = null; prediction = null; botPlan = null; tapQueue = null; log = []; outcome = null; side = color; flipped = side === 'b'; level = difficulty;
+  game = initialState(); solo = createDraftMatch(game); draftChoice = null; encounter = null; prediction = null; botPlan = null; tapQueue = null; log = []; outcome = null; side = color; flipped = side === 'b'; level = difficulty;
   resetSelection(); technique = 'n';
   history.replaceState(null, '', location.pathname);
-  hide(); refreshGame(); saveSolo(); runBot();
+  hide(); prepareSoloDraft(); displayMatch(viewMatch(solo, Date.now(), side), true); saveSolo(); runBot();
 }
 function notePower(move, mover) {
   if (!move?.power) return;
@@ -169,7 +183,12 @@ function notePower(move, mover) {
 // Only the public view reaches the controls and the bot's counter predictor.
 function displayMatch(view, fresh = false) {
   const oldLength = log.length, previous = encounter;
-  const boardChanged = fresh || oldLength !== view.log.length || view.outcome?.reason !== outcome?.reason ||
+  const nextDraft = view.draft ?? null;
+  const draftChanged = nextDraft?.phase !== draft?.phase || nextDraft?.card !== draft?.card ||
+    nextDraft?.used !== draft?.used || nextDraft?.picked.w !== draft?.picked.w || nextDraft?.picked.b !== draft?.picked.b;
+  draft = nextDraft;
+  if (fresh || !draft || draft.picked[side]) draftChoice = draft?.card ?? null;
+  const boardChanged = fresh || draftChanged || oldLength !== view.log.length || view.outcome?.reason !== outcome?.reason ||
     previous?.id !== view.encounter?.id || previous?.phase !== view.encounter?.phase;
   game = view.state; log = view.log; outcome = view.outcome; encounter = view.encounter;
   if (!boardChanged) { paintEncounter(); return; }
@@ -177,7 +196,9 @@ function displayMatch(view, fresh = false) {
   if (!encounter || tapQueue?.id !== encounter.id) tapQueue = null;
   if (!fresh && oldLength < log.length) {
     const move = log.at(-1);
-    notePower(move, move.side); ping(!!move.power && move.resolution !== 'countered');
+    notePower(move, move.side);
+    if (move.wildcard) toast(move.label);
+    ping(!!move.power && move.resolution !== 'countered');
   }
   refreshGame();
   if (encounter && mode !== 'room' && modal.open && !el('join-code')) hide();
@@ -189,7 +210,7 @@ function displayMatch(view, fresh = false) {
 function commitSolo(next, now) {
   if (next === solo) { paintEncounter(); return; }
   solo = next;
-  displayMatch(viewMatch(solo, now));
+  displayMatch(viewMatch(solo, now, side));
   saveSolo();
   runBot();
 }
@@ -202,17 +223,17 @@ function soloMove(move) {
 // can see. Duel offsets are fixed once, so reloading cannot reroll a rival.
 function tickSolo(now) {
   let next = solo;
-  let signal = viewMatch(next, now).encounter;
   const bot = opponent(side);
+  let signal = viewMatch(next, now, bot).encounter;
   if (signal?.phase === 'counter' && signal.caster !== bot &&
       now >= signal.deadline - COUNTER_MS + 900 && now < signal.deadline) {
-    const publicBoard = viewMatch(next, now).state;
+    const publicBoard = viewMatch(next, now, bot).state;
     next = counterMatch(next, bot, chooseCounterSquare(publicBoard, level), now);
-    signal = viewMatch(next, now).encounter;
+    signal = viewMatch(next, now, bot).encounter;
   }
   if (signal?.phase === 'duel' && !signal.ready[bot] && !signal.startsAt && now < signal.readyDeadline) {
     next = readyMatch(next, bot, now);
-    signal = viewMatch(next, now).encounter;
+    signal = viewMatch(next, now, bot).encounter;
   }
   if (signal?.phase === 'duel' && signal.startsAt) {
     if (botPlan?.id !== signal.id) {
@@ -235,8 +256,9 @@ function paintEncounter() {
   const buffered = tapQueue?.id === encounter?.id && tapQueue ?
     tapQueue.queued + (tapQueue.flight && encounter.lastSeq?.[side] < tapQueue.flight.seq ? tapQueue.flight.count : 0) : 0;
   const target = encounter?.phase === 'duel' ? game.board[encounter.to] : null;
+  const caster = encounter?.phase === 'duel' ? game.board[encounter.from] : null;
   encounterPanel(encounter, side, game.counters?.[side] ?? 2, prediction, clock(), busy, buffered,
-    target ? names[target.toLowerCase()].toLowerCase() : 'piece');
+    target ? names[target.toLowerCase()].toLowerCase() : 'piece', caster ? names[caster.toLowerCase()].toLowerCase() : 'caster');
 }
 function answerEncounter(answer) {
   if (!encounter || busy) return;
@@ -295,7 +317,7 @@ async function flushTapQueue() {
 }
 
 function runBot() {
-  if (mode !== 'bot' || encounter || outcome || game.turn === side || worker) return;
+  if (mode !== 'bot' || draft?.phase === 'picking' || encounter || outcome || game.turn === side || worker) return;
   const id = ++job;
   const fail = () => {
     if (id !== job) return;
@@ -310,7 +332,8 @@ function runBot() {
       stopWorker();
       try { soloMove(data.move); } catch { botError = true; render(); }
     };
-    worker.postMessage({id, state: game, level});
+    const botView = viewMatch(solo, Date.now(), opponent(side));
+    worker.postMessage({id, state:botView.state, level, wildcard: botView.draft?.used ? null : botView.draft?.card ?? null});
     render();
   } catch { fail(); }
 }
@@ -318,6 +341,7 @@ function controlledMove(move) {
   if (!mine()) return;
   if (mode === 'bot') { soloMove(move); return; }
   const intent = {from: move.from, to: move.to};
+  if (move.wildcard) intent.wildcard = move.wildcard;
   if (move.power) intent.power = move.power;
   if (move.promotion) intent.promotion = move.promotion;
   void roomAction('move', {move: intent});
@@ -333,12 +357,47 @@ function choosePromotion(options) {
   }
 }
 
+function activeCard() { return draft?.phase === 'playing' && !!draft.card && !draft.used; }
+
+function prepareSoloDraft() {
+  const bot = opponent(side);
+  const botView = viewMatch(solo, Date.now(), bot);
+  if (botView.draft?.phase === 'picking' && !botView.draft.picked[bot]) {
+    solo = draftMatch(solo, bot, chooseDraftCard(botView.state, level, Math.random, bot));
+  }
+}
+function lockDraft() {
+  if (!draftChoice || !draft || draft.phase !== 'picking' || draft.picked[side] || busy) return;
+  if (mode === 'room') { void roomAction('draft', {card:draftChoice}); return; }
+  const now = Date.now();
+  prepareSoloDraft();
+  commitSolo(draftMatch(solo, side, draftChoice), now);
+}
+function drawWildcards() {
+  wildPanels({draft, side, choice:draftChoice, busy, mine:mine(), checked:inCheck(game,side),
+    armed:cardArmed, hasTargets:cardMoves.length > 0, outcome});
+}
+function armWildcard() {
+  if (cardArmed) { resetSelection(); render(); return; }
+  if (!mine() || !activeCard() || !cardMoves.length) return;
+  resetSelection(); cardArmed = true; render();
+  if (matchMedia('(max-width:680px)').matches) board.scrollIntoView({block:'center', behavior:'smooth'});
+}
+function pickCardSquare(index) {
+  const target = cardMoves.find(move => move.from === (selected ?? index) && move.to === index);
+  if (target) { controlledMove(target); return; }
+  if (cardMoves.some(move => move.from === index)) selected = selected === index ? null : index;
+  else toast(wildcardInstruction(draft.card, selected != null));
+  render();
+}
+
 function selectSquare(index) {
   roving = index;
   if (encounter?.phase === 'counter' && encounter.caster !== side && !busy && clock() < encounter.deadline) {
     prediction = index; drawBoard(); paintEncounter(); return;
   }
   if (!mine()) return;
+  if (cardArmed) { pickCardSquare(index); return; }
   const piece = game.board[index];
   const targets = selected == null ? [] : moves.filter(move =>
     move.from === selected && move.to === index && (armed ? move.power === technique : !move.power));
@@ -347,14 +406,14 @@ function selectSquare(index) {
     else controlledMove(targets[0]);
     return;
   }
-  if (armed && piece && sideOf(piece) === side && piece.toLowerCase() === technique &&
+  if (armed && piece && sideOf(piece) === side && powerAt(game,index) === technique &&
       moves.some(move => move.from === index && move.power === technique)) {
     selected = index; render(); return;
   }
   if (piece && sideOf(piece) === side) {
     armed = false;
     selected = selected === index ? null : index;
-    if (selected != null) technique = piece.toLowerCase();
+    if (selected != null) technique = powerAt(game,index);
   } else { resetSelection(); }
   render();
 }
@@ -363,7 +422,7 @@ function arm() {
   const choices = moves.filter(move => move.power === technique);
   if (!mine() || !choices.length) return;
   const origins = [...new Set(choices.map(move => move.from))];
-  armed = true;
+  cardArmed = false; armed = true;
   if (!origins.includes(selected)) selected = origins.length === 1 ? origins[0] : null;
   render();
   if (matchMedia('(max-width:680px)').matches) board.scrollIntoView({block: 'center', behavior: 'smooth'});
@@ -373,13 +432,31 @@ function drawBoard() {
   const focused = board.contains(document.activeElement);
   const indices = Array.from({length:64}, (_, i) => flipped ? 63 - i : i);
   const last = log.at(-1), checked = inCheck(game, game.turn), domain = game.domain;
-  const selectedMoves = selected == null ? [] : moves.filter(move =>
+  const visibleLast = Number.isInteger(last?.from) && Number.isInteger(last?.to);
+  const cardOrigins = new Set(cardArmed ? cardMoves.map(move => move.from) : []);
+  const cardTargets = new Set(cardArmed ? cardMoves.filter(move => move.from === selected ||
+    (selected == null && move.from === move.to)).map(move => move.to) : []);
+  const selectedMoves = selected == null || cardArmed ? [] : moves.filter(move =>
     move.from === selected && (armed ? move.power === technique : !move.power));
   board.innerHTML = indices.map(i => {
     const piece = game.board[i], row = i >> 3, col = i % 8;
     const target = selectedMoves.some(move => move.to === i);
     const cls = ['square', (row + col) % 2 ? 'dark' : 'light'];
-    if (last && (last.from === i || last.to === i)) cls.push('last');
+    if (visibleLast && (last.from === i || last.to === i)) cls.push('last');
+    const cues = [];
+    const exile = game.wild?.exiles?.find(record => record.square === i);
+    if (exile) {
+      cls.push('wc-exile');
+      cues.push(sideName(sideOf(exile.piece)) + ' ' + names[exile.piece.toLowerCase()] + ' returns in ' +
+        exile.remaining + (exile.remaining === 1 ? ' ply' : ' plies'));
+    }
+    if (game.wild?.freeze?.square === i) { cls.push('wc-frozen'); cues.push('frozen'); }
+    if (game.wild?.noble?.includes(i)) { cls.push('wc-immune'); cues.push('noble protection'); }
+    if (piece && sideOf(piece) === side && game.wild?.trades?.[i]) {
+      cls.push('wc-traded'); cues.push('carries ' + POWERS[powerAt(game,i)].name);
+    }
+    if (selected == null && cardOrigins.has(i)) { cls.push('wc-origin'); cues.push('wildcard choice'); }
+    if (cardTargets.has(i)) { cls.push('wc-target'); cues.push('wildcard target'); }
     if (i === selected) cls.push('selected');
     if (target) {
       cls.push('legal');
@@ -396,10 +473,11 @@ function drawBoard() {
     if (guessing) cls.push('forecast-choice');
     if (guessing && prediction === i) cls.push('forecast-selected');
     if (flash === i) cls.push('flash');
-    const label = coord(i) + (piece ? ' ' + sideName(sideOf(piece)) + ' ' + names[piece.toLowerCase()] : ' empty') + (target ? ' · legal destination' : '') + (guessing && prediction === i ? ' · selected prediction' : '') + (game.shield?.square === i ? ' · shielded' : '');
+    const label = coord(i) + (piece ? ' ' + sideName(sideOf(piece)) + ' ' + names[piece.toLowerCase()] : ' empty') + (target ? ' · legal destination' : '') + (guessing && prediction === i ? ' · selected prediction' : '') + (game.shield?.square === i ? ' · shielded' : '') +
+      (cues.length ? ' · ' + cues.join(' · ') : '');
     return '<button class="' + cls.join(' ') + '" tabindex="' + (roving === i ? 0 : -1) +
       '" aria-label="' + label + '" aria-pressed="' + (i === selected || (guessing && prediction === i)) + '" data-square="' + i + '">' +
-      (piece ? sprite(piece, 'piece') : '') + '</button>';
+      (piece ? sprite(piece, 'piece') : '') + (exile ? '<span class="wc-return" aria-hidden="true">↻' + exile.remaining + '</span>' : '') + '</button>';
   }).join('');
   el('files').innerHTML = [...(flipped ? 'hgfedcba' : 'abcdefgh')].map(f => '<span>' + f + '</span>').join('');
   el('ranks').innerHTML = [...(flipped ? '12345678' : '87654321')].map(r => '<span>' + r + '</span>').join('');
@@ -443,9 +521,21 @@ function drawDeck() {
       sprite(side === 'w' ? type.toUpperCase() : type) + '</button>';
   }).join('');
   const power = POWERS[technique];
-  el('tech-index').textContent = names[technique].toUpperCase() + ' / TECHNIQUE 0' + (Object.keys(names).indexOf(technique) + 1);
+  const carrier = selected == null ? null : game.board[selected];
+  const borrowed = carrier && sideOf(carrier) === side && powerAt(game,selected) === technique && carrier.toLowerCase() !== technique;
+  const who = borrowed ? names[carrier.toLowerCase()].toUpperCase() + ' ON ' + coord(selected).toUpperCase() + ' / BORROWED' : names[technique].toUpperCase();
+  el('tech-index').textContent = who + ' / TECHNIQUE 0' + (Object.keys(names).indexOf(technique) + 1);
   el('tech-name').textContent = power.name;
-  el('tech-text').textContent = power.description;
+  let details = power.description;
+  if (borrowed && technique === 'q') {
+    details = 'Challenge an enemy non-king within four squares along a rank or file, through blockers. A win removes the target. A loss or tie removes the caster. A king cannot wager itself.';
+  } else if (borrowed && technique === 'r') {
+    details = 'Shield another allied non-king up to three squares along a rank or file, through blockers. It cannot be captured on the next reply. The caster stays put.';
+  }
+  if (borrowed && carrier.toLowerCase() === 'p' && ['n','b'].includes(technique)) {
+    details += ' If this borrowed move reaches the last rank, the pawn returns to its starting square after resolving the effect.';
+  }
+  el('tech-text').textContent = details;
   el('tech-meta').innerHTML = icon('bolt') + power.cost + ' CHARGE' + (power.cost > 1 ? 'S' : '') + ' <i></i> ONCE PER SIDE';
   const button = el('power-btn'), possible = moves.some(move => move.power === technique);
   button.disabled = !mine() || !possible;
@@ -479,11 +569,16 @@ function drawStatus() {
     action = ['Retry bot', () => { botError = false; runBot(); }];
   } else if (busy) {
     message = 'Submitting your move…';
+  } else if (draft?.phase === 'picking') {
+    message = draft.picked[side] ? 'Your wildcard is locked. Waiting for the other pick.' : 'Choose and lock your wildcard before the first move.';
   } else if (game.turn !== side) {
     message = mode === 'bot' ? 'The Oracle is thinking…' : 'Your friend is thinking…';
+  } else if (cardArmed) {
+    message = wildcardInstruction(draft.card, selected != null);
+    action = ['Cancel wildcard', armWildcard];
   } else if (armed) {
-    message = selected == null ? 'Choose a highlighted ' + names[technique].toLowerCase() + '.' :
-      technique === 'k' ? 'Choose the king’s square to expand its domain.' :
+    message = selected == null ? 'Choose a highlighted carrier of ' + POWERS[technique].name + '.' :
+      technique === 'k' ? 'Choose the caster’s square to expand its domain.' :
         'Choose a violet destination to cast ' + POWERS[technique].name + '.';
   } else if (inCheck(game, side)) {
     message = 'Check. Find a move that protects your king.'; warning = true;
@@ -507,7 +602,7 @@ function drawLog() {
   const cell = move => {
     if (!move) return '';
     const label = escapeText(move.label);
-    return move.power ? '<em>' + label + '</em>' : label;
+    return move.power || move.wildcard ? '<em>' + label + '</em>' : label;
   };
   el('log-count').textContent = String(log.length).padStart(2, '0');
   let rows = '';
@@ -526,7 +621,7 @@ function render() {
   drawPlayer('south', flipped ? 'b' : 'w');
   const deck = el('tech-tabs').closest('.tech');
   if (deck) deck.hidden = encounter?.phase === 'counter' && side !== encounter.caster;
-  drawDeck(); drawStatus(); drawLog(); paintEncounter();
+  drawDeck(); drawStatus(); drawLog(); paintEncounter(); drawWildcards();
   const online = mode === 'room';
   el('board-mode').textContent = online ? 'ROOM DUEL' : 'BOT DUEL';
   el('profile-name').textContent = online ? 'Challenger' : 'The Oracle';
@@ -544,8 +639,8 @@ function render() {
 el('tech-tabs').onclick = event => {
   const button = event.target.closest('[data-type]');
   if (!button) return;
-  technique = button.dataset.type; armed = false;
-  if (selected != null && game.board[selected]?.toLowerCase() !== technique) selected = null;
+  technique = button.dataset.type; armed = false; cardArmed = false;
+  if (selected != null && powerAt(game,selected) !== technique) selected = null;
   render();
 };
 el('power-btn').onclick = arm;
@@ -681,7 +776,7 @@ async function pollRoom() {
 }
 async function roomAction(action, extra = {}) {
   if (mode !== 'room' || !room || busy) return;
-  busy = true; paintEncounter();
+  busy = true; paintEncounter(); drawWildcards();
   const epoch = roomEpoch, code = room.code;
   drawStatus(); drawDeck();
   try {
@@ -719,16 +814,17 @@ function restoreSolo() {
   try {
     const old = saved.match || {state:saved.game, log:saved.log, outcome:saved.outcome};
     if (!old.state || !Array.isArray(old.log)) return;
-    const migrated = {...createMatch(old.state), encounter:old.encounter ?? null, log:old.log, outcome:old.outcome ?? null};
+    const migrated = {...old, state:createMatch(old.state).state, encounter:old.encounter ?? null, log:old.log, outcome:old.outcome ?? null};
     legalMoves(migrated.state);
     solo = migrated;
-    game = solo.state; log = solo.log; side = saved.side; outcome = solo.outcome;
-    encounter = viewMatch(solo, Date.now()).encounter; botPlan = saved.botPlan ?? null;
+    side = saved.side; botPlan = saved.botPlan ?? null;
     level = saved.level; flipped = side === 'b';
   } catch { /* Ignore an invalid local save and start a fresh duel. */ }
 }
 async function boot() {
-  soundButton(); restoreSolo(); refreshGame(); if (encounter) tickSolo(Date.now());
+  soundButton(); restoreSolo(); prepareSoloDraft();
+  displayMatch(viewMatch(solo, Date.now(), side), true); saveSolo();
+  if (encounter) tickSolo(Date.now());
   const code = new URL(location.href).searchParams.get('room')?.trim().toUpperCase();
   if (code) {
     friendModal(code);

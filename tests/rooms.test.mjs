@@ -23,12 +23,18 @@ function store(t) {
   return db;
 }
 
-async function pair(db) {
+async function pair(db, pickCards = true) {
   const host = await request(db, "", "POST");
   assert.equal(host.status, 201);
   const path = "/" + host.data.code;
   const guest = await request(db, path + "/join", "POST");
   assert.equal(guest.status, 200);
+  if (pickCards) {
+    for (const [seat, card] of [[host.data,"noble"], [guest.data,"relay"]]) {
+      const selected = await request(db, path + "/draft", "POST", seat.token, {revision:guest.data.revision,card});
+      assert.equal(selected.status,200);
+    }
+  }
   return { host: host.data, guest: guest.data, path };
 }
 
@@ -47,10 +53,10 @@ test("host and guest play, keep the same position after reopening the database, 
   assert.equal(guest.revision, 1);
   assert.notEqual(host.token, guest.token);
   assert.equal((await request(db, path + "/move", "POST", guest.token, {
-    revision: 1, move: { from: 12, to: 28 },
+    revision: 3, move: { from: 12, to: 28 },
   })).status, 409);
   const white = await request(db, path + "/move", "POST", host.token, {
-    revision: 1, move: { from: 52, to: 36 },
+    revision: 3, move: { from: 52, to: 36 },
   });
   assert.equal(white.status, 200);
   assert.equal(white.data.state.board[36], "P");
@@ -58,7 +64,7 @@ test("host and guest play, keep the same position after reopening the database, 
   assert.equal(white.data.log[0].side, "w");
   assert.ok(white.data.log[0].label);
   const black = await request(db, path + "/move", "POST", guest.token, {
-    revision: 2, move: { from: 12, to: 28 },
+    revision: 4, move: { from: 12, to: 28 },
   });
   assert.equal(black.status, 200);
   assert.equal(black.data.state.turn, "w");
@@ -70,10 +76,10 @@ test("host and guest play, keep the same position after reopening the database, 
   assert.deepEqual(refresh.data.log, black.data.log);
   assert.equal(refresh.data.token, undefined);
   assert.equal(refresh.headers.get("Cache-Control"), "private, no-store");
-  const resigned = await request(db, path + "/resign", "POST", guest.token, { revision: 3 });
+  const resigned = await request(db, path + "/resign", "POST", guest.token, { revision: 5 });
   assert.deepEqual(resigned.data.outcome, { winner: "w", reason: "Resignation" });
   assert.equal((await request(db, path + "/move", "POST", host.token, {
-    revision: 4, move: { from: 62, to: 45 },
+    revision: 6, move: { from: 62, to: 45 },
   })).status, 409);
 });
 
@@ -126,11 +132,11 @@ test("only one simultaneous move is committed and the server computes all power 
   const db = store(t);
   const { host, guest, path } = await pair(db);
   const forged = await request(db, path + "/move", "POST", host.token, {
-    revision: 1, move: { from: 52, to: 20, power: "n" }, state: { energy: { w: 100 } },
+    revision: 3, move: { from: 52, to: 20, power: "n" }, state: { energy: { w: 100 } },
   });
   assert.equal(forged.status, 400);
   const action = {
-    revision: 1, move: { from: 57, to: 41, power: "n", castle: "K" },
+    revision: 3, move: { from: 57, to: 41, power: "n", castle: "K" },
     state: { board: [], turn: "w", energy: { w: 100 } },
   };
   const raced = await Promise.all([request(db, path + "/move", "POST", host.token, action),
@@ -140,10 +146,10 @@ test("only one simultaneous move is committed and the server computes all power 
   assert.deepEqual(pending.state, guest.state);
   assert.deepEqual(pending.log, []);
   assert.deepEqual(Object.keys(pending.encounter).sort(), ["caster","deadline","id","phase"]);
-  const body = {revision: 2, encounterId: pending.encounter.id, square: 0};
+  const body = {revision: 4, encounterId: pending.encounter.id, square: 0};
   assert.equal((await request(db, path + "/counter", "POST", host.token, body)).status, 403);
   assert.equal((await request(db, path + "/counter", "POST", guest.token, {...body, square: 64})).status, 400);
-  assert.equal((await request(db, path + "/move", "POST", host.token, {...action, revision: 2})).status, 409);
+  assert.equal((await request(db, path + "/move", "POST", host.token, {...action, revision: 4})).status, 409);
   const guesses = await Promise.all([
     request(db, path + "/counter", "POST", guest.token, body),
     request(db, path + "/counter", "POST", guest.token, body),
@@ -157,15 +163,15 @@ test("only one simultaneous move is committed and the server computes all power 
   assert.equal(view.data.state.board[57], null);
   assert.equal(view.data.log[0].power, "n");
   assert.equal(view.data.log.length, 1);
-  assert.equal(view.data.revision, 3);
-  assert.equal((await request(db, path + "/resign", "POST", guest.token, { revision: 1 })).status, 409);
+  assert.equal(view.data.revision, 5);
+  assert.equal((await request(db, path + "/resign", "POST", guest.token, { revision: 3 })).status, 409);
   assert.equal((await request(db, path + "/move", "POST", guest.token, { move: action.move })).status, 400);
 });
 
 test("server recognizes checkmate and refuses further play", async (t) => {
   const db = store(t);
   const { host, guest, path } = await pair(db);
-  let revision = 1;
+  let revision = 3;
   let last;
   // Ordinary Fool's Mate has three power escapes. Casting Domain Expansion
   // puts those escapes on cooldown before Black plays Qh4#.
@@ -192,7 +198,7 @@ async function tribunal(db) {
   const seats = await pair(db);
   const {host,guest,path} = seats;
   for (const [side,revision,from,to,power] of [
-    [host,1,51,35], [guest,2,11,27], [host,3,59,27,"q"],
+    [host,3,51,35], [guest,4,11,27], [host,5,59,27,"q"],
   ]) {
     const r = await request(db, path + "/move", "POST", side.token, {revision,move:{from,to,power}});
     assert.equal(r.status, 200);
@@ -206,10 +212,10 @@ test("simultaneous ready signals and sequenced taps merge without replay or clie
   const {host,guest,path,pending} = await tribunal(db);
   const encounterId = pending.encounter.id;
   const answer = await request(db, path + "/counter", "POST", guest.token, {
-    revision:4, encounterId, square:null,
+    revision:6, encounterId, square:null,
   });
   assert.equal(answer.data.encounter.phase, "duel");
-  const payload = {revision:5, encounterId};
+  const payload = {revision:7, encounterId};
   const act = (name,token,body,now) => request(db, path + "/" + name,"POST",token,{...payload,...body},now);
   const ready = await Promise.all([act("ready",host.token,{},2000), act("ready",guest.token,{},2000)]);
   assert.deepEqual(ready.map(x=>x.status),[200,200]);
@@ -229,7 +235,7 @@ test("simultaneous ready signals and sequenced taps merge without replay or clie
   const current = (await request(db,path,"GET",guest.token,undefined,5100)).data;
   assert.deepEqual(current.encounter.scores,{w:2,b:2});
   assert.deepEqual(current.encounter.lastSeq,{w:1,b:1});
-  assert.equal(current.revision,9);
+  assert.equal(current.revision,11);
   const extra = await act("tap",host.token,{seq:2,count:4},5600);
   assert.equal(extra.data.encounter.scores.w,6);
   assert.equal((await act("tap",guest.token,{seq:2,count:1},15000)).status,409);
@@ -239,7 +245,7 @@ test("simultaneous ready signals and sequenced taps merge without replay or clie
   assert.equal(finished.state.board[27],null);
   assert.equal(finished.log.length,3);
   assert.deepEqual(finished.log[2].duel,{scores:{w:6,b:2},winner:"w"});
-  assert.equal(finished.revision,11);
+  assert.equal(finished.revision,13);
 });
 
 test("idle reconnect resolves expired reaction and duel exactly once; legacy boards load", async t => {
@@ -247,7 +253,7 @@ test("idle reconnect resolves expired reaction and duel exactly once; legacy boa
   const {host,guest,path,pending} = await tribunal(db);
   const polls = await Promise.all([host,guest].map(seat=>request(db,path,"GET",seat.token,undefined,50000)));
   for (const {data} of polls) {
-    assert.equal(data.revision,5);
+    assert.equal(data.revision,7);
     assert.equal(data.encounter,null);
     assert.equal(data.state.board[59],null);
     assert.equal(data.state.board[27],"p");
@@ -255,7 +261,7 @@ test("idle reconnect resolves expired reaction and duel exactly once; legacy boa
     assert.equal(data.log[2].duel.winner,"b");
   }
   const late = await request(db,path + "/counter","POST",guest.token,{
-    revision:4, encounterId:pending.encounter.id, square:27,
+    revision:6, encounterId:pending.encounter.id, square:27,
   },50000);
   assert.equal(late.status,409);
   const legacy = structuredClone(host.state);
@@ -276,7 +282,7 @@ test("reopening the database mid-cast restores only the public blind prompt unti
   t.after(()=>{db.close();rmSync(dir,{recursive:true,force:true});});
   const {host,guest,path} = await pair(db);
   const cast = await request(db,path + "/move","POST",host.token,{
-    revision:1,move:{from:57,to:41,power:"n"},
+    revision:3,move:{from:57,to:41,power:"n"},
   },2000);
   db.close();
   db = openRoomStore(filename);
@@ -291,4 +297,72 @@ test("reopening the database mid-cast restores only the public blind prompt unti
   assert.equal(solved.data.log[0].resolution,"countered");
   assert.equal(solved.data.state.board[57],"N");
   assert.equal(solved.data.state.counters.b,1);
+});
+
+test("a host can draft before the guest arrives; two seats cannot inspect, replace, or replay the other's wildcard",async t => {
+  const db=store(t);
+  const host=(await request(db,"","POST")).data, path="/"+host.code;
+  const choose=(seat,card,revision)=>request(db,path+"/draft","POST",seat,{card,revision});
+  assert.equal((await choose(host.token,"constructor",0)).status,400);
+  const early=await choose(host.token,"trade",0);
+  assert.equal(early.status,200);
+  assert.equal(early.data.draft.phase,"picking");
+  assert.equal(early.data.ready,false);
+  const guest=(await request(db,path+"/join","POST")).data;
+  assert.deepEqual(guest.draft,{phase:"picking",card:null,used:false,picked:{w:true,b:false}});
+  assert.equal((await request(db,path+"/move","POST",host.token,{revision:guest.revision,move:{from:52,to:36}})).status,409);
+  assert.equal((await choose(guest.token,"kamui",guest.revision)).data.draft.phase,"playing");
+  assert.equal((await choose(host.token,"trade",0)).data.revision,3);
+  assert.equal((await choose(host.token,"relay",0)).status,409);
+  assert.equal((await choose("1".repeat(64),"freeze",3)).status,403);
+  const mine=(await request(db,path,"GET",host.token)).data;
+  const theirs=(await request(db,path,"GET",guest.token)).data;
+  assert.equal(mine.draft.card,"trade");
+  assert.equal(theirs.draft.card,"kamui");
+  assert.equal((await request(db,path+"/move","POST",host.token,{
+    revision:3,move:{wildcard:"kamui",from:57,to:57}
+  })).status,400);
+});
+
+test("simultaneous private picks survive reconnect, and the opponent's trade log retains no coordinates",async t => {
+  const dir=mkdtempSync(join(tmpdir(),"riftbound-hand-"));
+  const filename=join(dir,"room.db");
+  let db=openRoomStore(filename);
+  t.after(()=>{db.close();rmSync(dir,{recursive:true,force:true});});
+  const {host,guest,path}=await pair(db,false);
+  const select=(token,card)=>request(db,path+"/draft","POST",token,{revision:1,card});
+  const responses=await Promise.all([select(host.token,"trade"),select(guest.token,"relay")]);
+  assert.deepEqual(responses.map(x=>x.status),[200,200]);
+  db.close();db=openRoomStore(filename);
+  const privateView=(await request(db,path,"GET",host.token)).data;
+  assert.equal(privateView.revision,3);
+  assert.equal(privateView.draft.card,"trade");
+  const card={wildcard:"trade",from:57,to:58}; // b1 knight, c1 bishop
+  const changed=await request(db,path+"/move","POST",host.token,{revision:3,move:card});
+  assert.equal(changed.status,200);
+  assert.equal(changed.data.log[0].from,57);
+  assert.equal(changed.data.draft.used,true);
+  assert.equal(changed.data.encounter,null);
+  db.close();db=openRoomStore(filename);
+  const hidden=(await request(db,path,"GET",guest.token)).data;
+  assert.equal(hidden.draft.card,"relay");
+  assert.equal(hidden.draft.used,false);
+  assert.deepEqual(hidden.log[0],{side:"w",wildcard:"trade",label:"Power Trade · hidden targets"});
+  assert.deepEqual(hidden.state.wild?.trades??{},{});
+  assert.equal((await request(db,path+"/move","POST",host.token,{revision:3,move:card})).status,409);
+  const mine=(await request(db,path,"GET",host.token)).data;
+  assert.equal(mine.draft.used,true);
+  assert.equal(mine.log[0].to,58);
+});
+
+test("old v2 room envelopes accept moves immediately and never acquire a wildcard draft on save",async t=>{
+  const db=store(t), {path,host,guest}=await pair(db,false);
+  await db.prepare("UPDATE rooms SET state = ? WHERE code = ? RETURNING code")
+    .bind(JSON.stringify({version:2,state:host.state,encounter:null}),host.code).first();
+  const before=await request(db,path,"GET",host.token);
+  assert.equal(before.data.draft,null);
+  const move=await request(db,path+"/move","POST",host.token,{revision:guest.revision,move:{from:52,to:36}});
+  assert.equal(move.status,200);
+  assert.equal(move.data.draft,null);
+  assert.equal((await request(db,path+"/draft","POST",guest.token,{revision:move.data.revision,card:"kamui"})).status,409);
 });

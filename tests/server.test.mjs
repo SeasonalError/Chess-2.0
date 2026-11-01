@@ -36,7 +36,11 @@ test('standalone HTTP arena keeps a cast secret, resolves a pass and synchronize
   const host = await request('', 'POST', null, {});
   const path = '/' + host.code;
   const guest = await request(path + '/join', 'POST', null, {});
-  await request(path + '/move', 'POST', host.token, {revision: guest.revision, move: {from:57, to:41, power:'n'}});
+  await request(path + '/draft', 'POST', host.token, {revision:guest.revision, card:'noble'});
+  const locked = await request(path + '/draft', 'POST', guest.token, {revision:guest.revision, card:'trade'});
+  assert.equal(locked.draft.phase,'playing');
+  assert.equal(locked.draft.card,'trade');
+  await request(path + '/move', 'POST', host.token, {revision: locked.revision, move: {from:57, to:41, power:'n'}});
   const pending = await request(path, 'GET', guest.token);
   assert.equal(pending.encounter.phase, 'counter');
   assert.equal(pending.state.board[57], 'N');

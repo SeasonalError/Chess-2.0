@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialState,legalMoves} from '../public/game/engine.js';
-import {createMatch,viewMatch,moveMatch,counterMatch,readyMatch,tapMatch,advanceMatch,
+import {initialState,legalMoves,wildcardMoves} from '../public/game/engine.js';
+import {createMatch,createDraftMatch,draftMatch,viewMatch,moveMatch,counterMatch,readyMatch,tapMatch,advanceMatch,
   COUNTER_MS, READY_MS, COUNTDOWN_MS, DUEL_MS} from '../public/game/encounter.js';
 
 const jump = {from:57,to:41,power:'n'};
@@ -114,4 +114,71 @@ test('winner keeps their combatant, a completely idle match favors the defender,
   assert.equal(done.encounter,null);
   assert.equal(done.log.at(-1).duel.winner,'b');
   assert.equal(advanceMatch(done,auto+200000),done);
+});
+
+function draft(state, white = 'trade', black = 'freeze') {
+  return draftMatch(draftMatch(createDraftMatch(state), 'w', white), 'b', black);
+}
+
+test('private draft locks one choice per seat and permits the same card on both sides', () => {
+  const empty = createDraftMatch();
+  const white = draftMatch(empty,'w','trade');
+  assert.equal(draftMatch(white,'w','trade'),white);
+  assert.throws(()=>draftMatch(white,'w','relay'),/locked/);
+  assert.throws(()=>draftMatch(empty,'w','toString'),/six wildcard/);
+  assert.throws(()=>moveMatch(white,'w',{from:52,to:36},100),/lock a wildcard/);
+  const black = viewMatch(white,100,'b').draft;
+  assert.deepEqual(black,{phase:'picking',card:null,used:false,picked:{w:true,b:false}});
+  assert.deepEqual(viewMatch(draftMatch(empty,'w','relay'),100,'b'),viewMatch(white,100,'b'));
+  const ready = draftMatch(white,'b','trade');
+  assert.equal(viewMatch(ready,100,'b').draft.card,'trade');
+  assert.equal(viewMatch(ready,100,'w').draft.phase,'playing');
+  assert.equal(viewMatch(ready,100).draft.card,null);
+  assert.equal(viewMatch(createMatch(),100,'w').draft,null);
+  assert.throws(()=>draftMatch(createMatch(),'w','trade'),/no wildcard draft/);
+});
+
+test('Power Trade is an immediate once-only turn; different private pairs have indistinguishable opponent snapshots', () => {
+  const match = draft(initialState());
+  const trades = wildcardMoves(match.state,'trade');
+  const distinct = trades.find(m => m.from !== trades[0].from && m.from !== trades[0].to &&
+    m.to !== trades[0].from && m.to !== trades[0].to);
+  assert.ok(distinct, 'starting board offers at least two disjoint pairs');
+  for (const wrong of ['freeze','constructor']) {
+    assert.throws(()=>moveMatch(match,'w',{...trades[0],wildcard:wrong},100), /unavailable/);
+  }
+  const resolved = moveMatch(match,'w',trades[0],100);
+  assert.equal(resolved.state.turn,'b');
+  assert.deepEqual(resolved.state.board,match.state.board);
+  assert.deepEqual(resolved.state.energy,match.state.energy);
+  assert.deepEqual(resolved.state.counters,match.state.counters);
+  assert.equal(resolved.encounter,null);
+  const mine = viewMatch(resolved,100,'w');
+  assert.equal(mine.draft.used,true);
+  assert.equal(mine.log[0].from,trades[0].from);
+  assert.equal(mine.log[0].to,trades[0].to);
+  const theirs = viewMatch(resolved,100,'b');
+  assert.deepEqual(Object.keys(theirs.log[0]).sort(),['label','side','wildcard']);
+  const alternative = moveMatch(match,'w',distinct,100);
+  assert.deepEqual(viewMatch(alternative,100,'b'),theirs);
+  assert.deepEqual(viewMatch(alternative,100),viewMatch(resolved,100));
+  const after = moveMatch(resolved,'b',{from:12,to:28},200);
+  assert.throws(()=>moveMatch(after,'w',trades[0],300), /unavailable/);
+});
+
+test('an available wildcard breaks stalemate but cannot prevent checkmate', () => {
+  const state = initialState();
+  state.board = Array(64).fill(null);
+  state.board[0]='k'; state.board[18]='K'; state.board[17]='Q'; // Ka8, Kc6, Qb6
+  state.castling=''; state.energy={w:0,b:0};
+  const match = draft(state);
+  const trapped=moveMatch(match,'w',{from:17,to:10},100); // Qc7
+  assert.equal(legalMoves(trapped.state).length,0);
+  assert.ok(wildcardMoves(trapped.state,'freeze').length);
+  assert.equal(trapped.outcome,null);
+  const played=moveMatch(trapped,'b',{wildcard:'freeze',from:10,to:10},200);
+  assert.equal(played.state.turn,'w');
+  const spent={...match,draft:{...match.draft,used:{w:false,b:true}}};
+  assert.deepEqual(moveMatch(spent,'w',{from:17,to:10},100).outcome,{winner:null,reason:'Stalemate'});
+  assert.deepEqual(moveMatch(match,'w',{from:17,to:9},100).outcome,{winner:'w',reason:'Checkmate'});
 });

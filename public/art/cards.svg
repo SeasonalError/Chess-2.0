@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- Each mark uses the card's inherited ink colour. -->
+  <symbol id="kamui" viewBox="0 0 64 64">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 37c-1-10 7-21 20-27m9-3 6-1m13 21c2 12-11 26-27 29" opacity=".45"/>
+      <path d="M9 43c3-10 11-20 23-25-9 1-16 5-21 11 5-12 16-20 29-20l7 2c-11 1-19 9-23 18 7-7 16-10 26-9-7 3-12 7-16 12" fill="currentColor" fill-opacity=".16" stroke-width="1.8"/>
+      <path d="M56 21c-4 10-11 19-23 25 9-1 16-5 21-11-5 12-17 20-29 20l-7-2c11-2 19-9 23-18-7 7-16 10-26 9 8-3 14-9 18-14" fill="currentColor" fill-opacity=".12" stroke-width="1.8"/>
+      <path d="m36 24-3 8 4 2-9 8 3-9-4-2z" fill="currentColor" stroke="none"/>
+    </g>
+  </symbol>
+  <symbol id="noble" viewBox="0 0 64 64">
+    <g fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+      <path d="m32 6 20 9-2 16c-1 11-7 19-18 26-11-7-17-15-18-26l-2-16z" fill="currentColor" fill-opacity=".12" stroke-width="2"/>
+      <path d="m32 12 14 6-1.5 12.5C43 39 39.5 46 32 51c-8-6-11-12-12.5-20.5L18 18z" stroke-width="1" opacity=".8"/>
+      <path d="m21 25 7 4 4-10 4 10 7-4-3 12H24z" fill="currentColor" fill-opacity=".82" stroke-width="1.3"/>
+      <path d="M26 41h12M8 21l2 14 6 9m40-23-2 14-6 9" opacity=".7" stroke-width="1.6"/>
+      <path d="m5 27 4 4m46 0 4-4" stroke-width="2"/>
+    </g>
+  </symbol>
+  <symbol id="trade" viewBox="0 0 64 64">
+    <g fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+      <path d="m22 9 11 6-6 4 14 0 0-6 14 10-14 10v-6H20l-6 4v-9l7-4-7-4z" fill="currentColor" fill-opacity=".13" stroke-width="1.8"/>
+      <path d="m42 55-11-6 6-4H23v6L9 41l14-10v6h21l6-4v9l-7 4 7 4z" fill="currentColor" fill-opacity=".23" stroke-width="1.8"/>
+      <path d="M21 23h25m-28 18h25M5 23h4m46 18h4" opacity=".68"/>
+      <path d="m32 28 4 4-4 4-4-4z" fill="currentColor" stroke="none"/>
+    </g>
+  </symbol>
+  <symbol id="freeze" viewBox="0 0 64 64">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m32 3 6 18 14-6-10 13 15 9-18-1-7 23-7-23-18 1 15-9-10-13 14 6z" fill="currentColor" fill-opacity=".08" stroke-width=".8" opacity=".8"/>
+      <path d="M32 8v48M11 20l42 24M11 44l42-24" stroke-width="2.5"/>
+      <path d="m26 14 6 6 6-6m-12 36 6-6 6 6M16 27l8-1-2-8m20 28-2-8 8-1M16 37l8 1-2 8m20-28-2 8 8 1" stroke-width="2"/>
+      <path d="m32 24 7 4v8l-7 4-7-4v-8z" fill="currentColor" fill-opacity=".3" stroke-width="1.5"/>
+      <path d="m32 27 5 5-5 5-5-5z" fill="currentColor" stroke="none"/>
+    </g>
+  </symbol>
+  <symbol id="repulse" viewBox="0 0 64 64">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 16c-7 11-7 21 0 32M57 16c7 11 7 21 0 32" opacity=".45"/>
+      <path d="M16 15C5 24 5 40 16 49m32-34c11 9 11 25 0 34" stroke-width="2"/>
+      <path d="M22 21c-6 6-6 16 0 22m20-22c6 6 6 16 0 22" opacity=".6" stroke-width="1.5"/>
+      <path d="m34 8 1 15 10-7-6 12 17 3-17 4 6 13-12-9-4 17-2-17-10 7 5-11-14-4 15-3-6-12 12 8z" fill="currentColor" fill-opacity=".19" stroke-width="1.6"/>
+      <path d="m32 23 2 7 5 2-6 2-2 7-2-7-5-2 6-2z" fill="currentColor" stroke="none"/>
+    </g>
+  </symbol>
+  <symbol id="relay" viewBox="0 0 64 64">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m5 46 10-6 10 6v10l-10 6-10-6zm34-38 10-6 10 6v11l-10 6-10-6z" fill="currentColor" fill-opacity=".12" stroke-width="1.8"/>
+      <path d="m15 45 5 3v6l-5 3-5-3v-6zm34-38 5 3v6l-5 3-5-3v-6z" fill="currentColor" fill-opacity=".75" stroke-width=".8"/>
+      <path d="M14 35V23h17l-4-5m4 5-5 5M49 30v12H32l4-5m-4 5 5 5" stroke-width="2.3"/>
+      <path d="m21 41 10-10m5-4 6-6" stroke-dasharray="3 3" stroke-width="1.1"/>
+      <path d="m32 27 5 5-5 5-5-5z" fill="currentColor" fill-opacity=".35" stroke-width="1.4"/>
+    </g>
+  </symbol>
+</svg>

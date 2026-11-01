@@ -444,3 +444,160 @@ input, select { width: 100%; background: #15121b; color: var(--text); border: 1p
   .encounter { animation: none; }
   .enc-track > * { transition: none; }
 }
+
+/* The sealed hand. Every mark keeps its own shape as well as its suit colour. */
+[data-card="kamui"]   { --card-ink:#d2adff; --card-field:#342342; --card-line:#715681; }
+[data-card="noble"]   { --card-ink:#f2d392; --card-field:#342c20; --card-line:#766243; }
+[data-card="trade"]   { --card-ink:#ffb78f; --card-field:#392823; --card-line:#815c4d; }
+[data-card="freeze"]  { --card-ink:#a1e2f5; --card-field:#1d303a; --card-line:#507380; }
+[data-card="repulse"] { --card-ink:#f4a4ba; --card-field:#392330; --card-line:#805267; }
+[data-card="relay"]   { --card-ink:#aceac8; --card-field:#1f332e; --card-line:#527965; }
+
+.draft-panel {
+  margin: 14px 0 10px;
+  padding: clamp(12px,2vw,19px);
+  border: 1px solid #54465f; border-radius: 8px;
+  background: radial-gradient(ellipse at top right, #44324f50, transparent 60%), #211c29;
+  scroll-margin-block: 12px;
+}
+.draft-panel:focus { outline: none; }
+.draft-panel:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.draft-kicker, .wildcard-kicker, .wildcard-meta, .draft-cost {
+  font: 650 9px/1.35 var(--mono); text-transform: uppercase; letter-spacing: 1.2px;
+}
+.draft-kicker, .wildcard-kicker {
+  display: flex; align-items: center; gap: 7px; color: #c9aeea;
+}
+.draft-kicker::before, .wildcard-kicker::before {
+  content: ''; width: 15px; height: 2px; background: currentColor;
+}
+.draft-title { margin: 6px 0; font: 810 clamp(23px,2.4vw,31px)/1.1 var(--display); letter-spacing: -1.15px; }
+.draft-copy { max-width: 62ch; color: #c8bece; font-size: 13px; line-height: 1.45; }
+.draft-hand {
+  display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 7px;
+  margin: 14px 0 12px;
+}
+.draft-card {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: grid; grid-template-rows: 1fr auto auto; align-content: end; justify-items: start;
+  gap: 2px; min-height: 98px; padding: 8px 10px 10px;
+  color: #f6eff7; border: 1px solid var(--card-line); border-radius: 5px;
+  background: linear-gradient(127deg, var(--card-field) 0%, #211e27 95%);
+  text-align: left; font-size: 13px;
+}
+.draft-card::before {
+  content: ''; position: absolute; z-index:-1; inset:0; pointer-events:none; opacity:.14;
+  background: repeating-linear-gradient(130deg, transparent 0 11px, var(--card-ink) 11px 11.5px, transparent 11.5px 22px);
+  mask-image: linear-gradient(110deg, transparent 14%, #000);
+}
+.draft-card::after {
+  content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px;
+  border: 1px solid var(--card-line); transform: rotate(45deg); background: #211e27;
+}
+.draft-card:hover:not(:disabled), .draft-card:focus-visible, .draft-card[aria-pressed=true] {
+  color: white; border-color: var(--card-ink);
+}
+.draft-card[aria-pressed=true] {
+  box-shadow: inset 0 0 0 1px var(--card-ink), inset 0 -3px var(--card-ink);
+}
+.draft-card[aria-pressed=true]::after {
+  border-color: var(--card-ink); background: var(--card-ink);
+  box-shadow: 0 0 6px var(--card-line);
+}
+.draft-card:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+.draft-sigil { width: 40px; height: 40px; color: var(--card-ink); filter: drop-shadow(0 1px 3px #09070c80); }
+.draft-cost { color: var(--card-ink); font-size: 8px; letter-spacing: .9px; }
+.draft-name { font-weight: 740; line-height: 1.2; }
+.draft-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.draft-description {
+  color: #d0c4d8; font-size: 12px; line-height: 1.45; padding: 9px 0;
+}
+.draft-description .draft-name { display: block; color: #eee5f5; margin-bottom: 2px; }
+.draft-lock { min-height: 39px; flex: none; }
+.draft-lock:disabled { border-color: #53465f; color: #bab0c4; background: #332b3b; }
+
+.wildcard-panel {
+  position: relative; isolation: isolate; padding: 15px; overflow: hidden;
+  background: linear-gradient(112deg,var(--card-field,#342a3e),#211e27 88%);
+  border-color: var(--card-line,#574861);
+}
+.wildcard-kicker { color: var(--card-ink); }
+.wildcard-sigil {
+  position: absolute; right: 13px; top: 12px; width: 47px; height: 47px;
+  color: var(--card-ink); opacity:.9; z-index:-1;
+}
+.wildcard-title {
+  font: 780 22px/1.15 var(--display); letter-spacing: -.65px;
+  margin: 7px 45px 3px 0; color: #f4eef6;
+}
+.wildcard-meta { color: var(--card-ink); font-size: 8px; letter-spacing: 1px; }
+.wildcard-description { color: #cec5d2; font-size: 12px; line-height: 1.5; margin: 9px 0 12px; }
+.wildcard-actions { display:flex; align-items: center; gap:8px; flex-wrap: wrap; }
+.wildcard-actions .cast-btn {
+  background: #251f2aaa; border-color: var(--card-line); color: var(--card-ink);
+}
+.wildcard-actions .cast-btn.armed { border-color: var(--card-ink); box-shadow: inset 0 -2px var(--card-line); }
+.wildcard-actions .cast-btn:disabled { background: #27232c; border-color: #443d4b; color: #b2aaba; }
+.wildcard-panel[data-state=spent] { background: linear-gradient(112deg,#28252d,#201e25); border-color: #49444e; }
+.wildcard-panel[data-state=spent] .wildcard-sigil { opacity: .45; }
+.codex-item[data-card] > svg { color: var(--card-ink); }
+
+/* Ability markers stay visually distinct from the ordinary legal-move dot. */
+.square.wc-origin { box-shadow: inset 0 0 0 3px #4e3161, inset 0 0 0 5px #e4bcff; }
+.square.wc-target::after {
+  content:''; position:absolute; z-index:3; width:34%; aspect-ratio:1; border-radius:18%;
+  transform:rotate(45deg); border:2px solid #efe3ff; background:#70448bbc;
+  box-shadow: 0 0 0 1px #4c315e;
+}
+.square.wc-target:has(.piece)::after {
+  width:82%; height:82%; transform:none; border:3px dashed #624176;
+  border-radius:12%; background:transparent; box-shadow:none;
+}
+.square.wc-frozen {
+  background-image: repeating-linear-gradient(-45deg,#bdf3ff70 0 2px,transparent 2px 9px);
+  box-shadow: inset 0 0 0 2px #457381;
+}
+.square.wc-immune {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m12 2 9 4v6q-1 6-9 10-8-4-9-10V6z' fill='%23574325' stroke='%23ffe3a0' stroke-width='1.7'/%3E%3Cpath d='m7 9 3 2 2-4 2 4 3-2-1 6H8z' fill='%23ffdd8c'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-size:26% auto; background-position:right 3% top 3%;
+}
+/* Exile leaves a public return marker on the board; an occupied square can
+   still display the returning piece's countdown without obscuring its occupant. */
+.square.wc-exile {
+  background-image:
+    radial-gradient(ellipse at center, transparent 0 29%, #4a305e88 30% 33%, transparent 34% 43%, #dfb0ed77 44% 46%, transparent 47%),
+    linear-gradient(130deg, #57395c55, #825b9266);
+}
+.wc-return {
+  position:absolute; left:4%; bottom:4%; z-index:4; pointer-events:none;
+  padding:2px 3px; border:1px solid #d7b8ec; border-radius:3px;
+  background:#37223fed; color:#f4dcff; white-space:nowrap;
+  font:700 clamp(8px,1vw,12px)/1 var(--mono); font-variant-numeric:tabular-nums;
+}
+.square.wc-exile:not(:has(.piece)) .wc-return { position:relative; left:auto; bottom:auto; }
+.square.wc-traded:not(.legal):not(.wc-target)::after {
+  content:'⇄'; position:absolute; bottom:4%; left:4%; z-index:3; pointer-events:none;
+  display:grid; place-items:center; min-width:21%; aspect-ratio:1; border-radius:3px;
+  font:700 clamp(8px,1vw,13px)/1 var(--mono); color:#ffe2cd;
+  border:1px solid #ffcaab; background:#5c3324ed;
+}
+
+
+@media (min-width:491px) and (max-width:680px) {
+  .console .wildcard-panel { grid-column: 1 / -1; grid-row: 3; }
+}
+@media (max-width:490px) {
+  .console .wildcard-panel { order: 1; } .console .room-tools { order: 2; }
+  .draft-panel { margin: 8px 0; padding: 11px; }
+  .draft-hand { gap: 5px; margin: 10px 0; }
+  .draft-card { min-height: 89px; padding: 6px 6px 8px; font-size:12px; }
+  .draft-card::after { width:5px; height:5px; }
+  .draft-sigil { width:32px; height:32px; }
+  .draft-copy, .draft-description { font-size:12px; }
+  .draft-footer { display:grid; gap:4px; }
+  .draft-footer .draft-description { padding: 3px 0 5px; }
+  .draft-lock, .wildcard-actions .cast-btn { min-height:44px; }
+}
+@media (max-width:355px) {
+  .draft-hand { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}

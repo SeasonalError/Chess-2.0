@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialState, legalMoves, playLegal, resolveCast, result } from '../public/game/engine.js';
-import { chooseCounterSquare, duelTapSchedule, findBestMove } from '../public/game/bot.js';
+import { WILDCARDS, initialState, legalMoves, playLegal, redactWildcardState, resolveCast, result, wildcardMoves } from '../public/game/engine.js';
+import { chooseCounterSquare, chooseDraftCard, duelTapSchedule, findBestMove } from '../public/game/bot.js';
 
 function position(layout, { white = 3, black = 3, turn = 'w' } = {}) {
   const state = initialState();
@@ -124,4 +124,99 @@ test('tap schedules allow human reaction, scale by level and obey the shared rat
     for (let i = 1; i < fastest.length; i++) assert.ok(fastest[i] - fastest[i-1] >= 145);
   }
   assert.deepEqual(duelTapSchedule('hard',200),[]);
+});
+
+
+test('the open draft can choose all six cards and selects a viable card in sparse positions', () => {
+  const starting = initialState(), before = structuredClone(starting);
+  const choices = new Set(Array.from({length:36},(_,i) => chooseDraftCard(starting,'hard',() => i/36,'b')));
+  assert.deepEqual(choices,new Set(Object.keys(WILDCARDS)));
+  assert.deepEqual(starting,before);
+  const sparse = position('7k/8/8/8/8/8/8/K6R');
+  for (const random of [0,0.2,0.6,0.99]) {
+    assert.ok(['kamui','noble','trade'].includes(chooseDraftCard(sparse,'hard',() => random)));
+  }
+});
+
+test('saves opening cards instead of spending them for cosmetic changes', () => {
+  const state = initialState(), before = structuredClone(state);
+  for (const card of Object.keys(WILDCARDS)) {
+    const answer = findBestMove(state,'easy',{wildcard:card,maxDepth:2,timeMs:1200});
+    assert.equal(answer.move.wildcard,undefined);
+    assert.ok(legalMoves(state).some(move => JSON.stringify(move) === JSON.stringify(answer.move)));
+  }
+  assert.deepEqual(state,before);
+});
+
+test('uses Relay or Kamui when the one-shot card delivers otherwise unavailable mate', () => {
+  for (const [card,layout] of [
+    ['relay','6rk/5Ppp/4N3/8/8/8/8/K7'],
+    ['kamui','k6r/rpQ5/8/8/8/8/8/R3K3'],
+  ]) {
+    const state = position(layout,{white:0,black:0});
+    assert.ok(!legalMoves(state).some(move => result(playLegal(state,move))?.winner === 'w'));
+    const answer = findBestMove(state,'hard',{wildcard:card,maxDepth:3,timeMs:1200});
+    assert.equal(answer.move.wildcard,card);
+    assert.ok(wildcardMoves(state,card).some(move => JSON.stringify(move) === JSON.stringify(answer.move)));
+    assert.equal(result(playLegal(state,answer.move))?.winner,'w');
+    const withoutCard = findBestMove(state,'easy',{maxDepth:1});
+    assert.equal(withoutCard.move.wildcard,undefined);
+    assert.ok(withoutCard.score < 29000);
+  }
+});
+
+test('a borrowed Royal Tribunal stakes the cheap carrier and is worth using against a queen', () => {
+  const state = position('7k/8/8/8/8/8/P3q3/Q6K',{white:2,black:0});
+  state.counters.b = 0;
+  state.wild.trades = {48:'q',56:'p'};
+  const answer = findBestMove(state,'hard',{maxDepth:3,timeMs:1200});
+  assert.deepEqual(answer.move,{from:48,to:52,power:'q'});
+  const loss = resolveCast(state,answer.move,{queenWon:false});
+  assert.equal(loss.board[48],null);
+  assert.equal(loss.board[56],'Q');
+  assert.ok(answer.score > 0);
+});
+
+test('search and counter predictions ignore the opponent’s private trade assignments', () => {
+  const base = position('6rk/3N2pp/8/8/8/8/8/K7');
+  const secretlyTraded = structuredClone(base);
+  secretlyTraded.wild.trades = {6:'q',14:'r'};
+  const searchOptions = {maxDepth:2,timeMs:1200};
+  assert.deepEqual(findBestMove(base,'medium',searchOptions),findBestMove(secretlyTraded,'medium',searchOptions));
+  const casting = position('7k/8/8/8/8/8/P3q3/Q6K',{white:2,black:0});
+  const hidden = structuredClone(casting);
+  hidden.wild.trades = {48:'q',56:'p'};
+  for (const random of [0.02,0.3,0.8]) {
+    assert.equal(chooseCounterSquare(casting,'hard',() => random),chooseCounterSquare(hidden,'hard',() => random));
+  }
+});
+
+test('the normal worker entry point forwards the privately equipped wildcard', async () => {
+  const state = position('6rk/5Ppp/4N3/8/8/8/8/K7',{white:0,black:0});
+  let answer;
+  globalThis.self = {postMessage: value => { answer = value; }};
+  try {
+    await import('../public/game/bot-worker.js?wildcard-test');
+    self.onmessage({data:{id:19,state,level:'easy',wildcard:'relay'}});
+    assert.equal(answer.id,19);
+    assert.equal(answer.move.wildcard,'relay');
+    assert.equal(result(playLegal(state,answer.move))?.winner,'w');
+  } finally {
+    delete globalThis.self;
+  }
+});
+
+test('the bot recognizes threefold repetition after receiving a seat-filtered position', () => {
+  let state = initialState();
+  for (let n = 0; n < 2; n++) {
+    for (const [from,to] of [[62,45],[6,21],[45,62],[21,6]]) {
+      const move = legalMoves(state).find(m => m.from === from && m.to === to && !m.power);
+      state = playLegal(state,move);
+    }
+  }
+  const publicPosition = redactWildcardState(state,state.turn);
+  assert.equal(result(publicPosition)?.reason,'Threefold repetition');
+  const answer = findBestMove(publicPosition,'hard',{wildcard:'trade'});
+  assert.equal(answer.move,null);
+  assert.equal(answer.nodes,0);
 });

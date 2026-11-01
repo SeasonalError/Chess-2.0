@@ -1,4 +1,7 @@
-import { coord, initialState, labelMove, legalMoves, playLegal, resolveCast, result } from './engine.js';
+import {
+  coord, initialState, labelMove, legalMoves, playLegal, resolveCast, result,
+  WILDCARDS, wildcardMoves, redactWildcardState,
+} from './engine.js';
 
 export const COUNTER_MS = 15_000;
 export const READY_MS = 15_000;
@@ -24,7 +27,29 @@ function requireThat(condition, status, message) {
 export function createMatch(state = initialState()) {
   // Stored games from the first release predate counter seals.
   if (!state.counters) state = {...state, counters: {w: 2, b: 2}};
-  return {state, encounter: null, log: [], outcome: null};
+  return {state, draft: null, encounter: null, log: [], outcome: null};
+}
+
+export function createDraftMatch(state = initialState()) {
+  return {...createMatch(state), draft: {cards:{w:null,b:null}, used:{w:false,b:false}}};
+}
+
+export function draftMatch(match, side, card) {
+  requireThat(match.draft, 409, 'This match has no wildcard draft.');
+  requireThat(side === 'w' || side === 'b', 403, 'A player seat is required.');
+  requireThat(typeof card === 'string' && Object.hasOwn(WILDCARDS, card), 400, 'Choose one of the six wildcard cards.');
+  const {cards} = match.draft;
+  if (cards[side] === card) return match;
+  requireThat(!match.outcome && !cards[side], 409, 'Your wildcard choice is already locked.');
+  return {...match, draft: {...match.draft, cards: {...cards, [side]:card}}};
+}
+
+function matchResult(state, draft, moves) {
+  const ending = result(state, moves);
+  if (ending?.reason !== 'Stalemate' || !draft || draft.used[state.turn]) return ending;
+  // An unused playable card is a legal turn. Other automatic draw rules still apply.
+  const cards = wildcardMoves(state, draft.cards[state.turn]);
+  return cards.length ? result(state, cards) : ending;
 }
 
 function entry(state, move) {
@@ -33,7 +58,7 @@ function entry(state, move) {
 }
 
 function finish(match, state, record) {
-  return {state, encounter: null, log: [...match.log, record], outcome: result(state)};
+  return {...match, state, encounter: null, log: [...match.log, record], outcome: matchResult(state, match.draft)};
 }
 
 function settleCast(match, countered, queenWon = true) {
@@ -71,8 +96,21 @@ export function moveMatch(match, side, input, now, id) {
   requireThat(!match.outcome, 409, 'This match is over.');
   requireThat(!match.encounter, 409, 'Resolve the encounter before making a move.');
   requireThat(match.state.turn === side, 409, "It is your opponent's turn.");
+  const draft = match.draft;
+  requireThat(!draft || (draft.cards.w && draft.cards.b), 409, 'Both players must lock a wildcard before play.');
   const moves = legalMoves(match.state);
-  requireThat(!result(match.state, moves), 409, 'This match is over.');
+  requireThat(!matchResult(match.state, draft, moves), 409, 'This match is over.');
+  if (input?.wildcard != null) {
+    const id = input.wildcard;
+    requireThat(draft && draft.cards[side] === id && !draft.used[side], 400, 'That wildcard is unavailable.');
+    const cardMove = wildcardMoves(match.state, id).find(m => m.from === input.from && m.to === input.to);
+    requireThat(cardMove && input.power == null && input.promotion == null, 400, 'Illegal wildcard target.');
+    const spent = {...match, draft: {...draft, used: {...draft.used, [side]:true}}};
+    const {from, to} = cardMove;
+    const squares = from === to ? coord(to) : coord(from) + ' → ' + coord(to);
+    return finish(spent, playLegal(match.state, cardMove),
+      {label: WILDCARDS[id].name + ' · ' + squares, side, wildcard: id, from, to});
+  }
   const move = input && moves.find(m => m.from === input.from && m.to === input.to &&
     (m.power ?? null) === (input.power ?? null) && (m.promotion ?? null) === (input.promotion ?? null));
   requireThat(move, 400, 'That move is illegal in this position.');
@@ -150,7 +188,7 @@ export function advanceMatch(match, now) {
 
 // Explicit allowlists keep the stored intent, rate-limit state, and response
 // square out of every public snapshot during the blind reaction window.
-export function viewMatch(match, now) {
+export function viewMatch(match, now, viewer) {
   const e = match.encounter;
   let encounter = null;
   if (e?.phase === 'counter') encounter = {id:e.id, phase:e.phase, caster:e.caster, deadline:e.deadline};
@@ -159,5 +197,18 @@ export function viewMatch(match, now) {
     ready: {...e.ready}, readyDeadline:e.readyDeadline, startsAt:e.startsAt, endsAt:e.endsAt,
     scores: {...e.scores}, lastSeq:{...e.lastSeq},
   };
-  return {state:match.state, encounter, log:match.log, outcome:match.outcome, serverNow:now};
+  const seat = viewer === 'w' || viewer === 'b';
+  const hand = match.draft;
+  const draft = hand ? {
+    phase: hand.cards.w && hand.cards.b ? 'playing' : 'picking',
+    picked: {w: Boolean(hand.cards.w), b: Boolean(hand.cards.b)},
+    card: seat ? hand.cards[viewer] : null,
+    used: seat ? hand.used[viewer] : false,
+  } : null;
+  // The board and history may themselves contain secret technique assignments.
+  // Omitting a viewer exposes neither player's private information.
+  const state = redactWildcardState(match.state, viewer);
+  const log = match.log.map(event => event.wildcard === 'trade' && event.side !== viewer
+    ? {side:event.side, wildcard:'trade', label:WILDCARDS.trade.name + ' · hidden targets'} : event);
+  return {state, draft, encounter, log, outcome:match.outcome, serverNow:now};
 }

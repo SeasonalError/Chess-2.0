@@ -2,13 +2,29 @@
 
 **[Play Riftbound](https://riftbound-chess-arena.nimeesh16-2007.chatgpt.site/)**
 
-Riftbound is a chess variant with six hidden techniques, a queen’s ten-second tap duel, a tactical bot and private two-player rooms. Win by checkmate.
+Riftbound is a chess variant with a private wildcard draft, six hidden techniques, a ten-second tap duel, a tactical bot and two-player rooms. Win by checkmate.
 
 ## Start a duel
 
 - **Play solo.** The arena opens with you playing White against The Oracle on Apex. Choose **New duel** to change sides or difficulty. Refreshing the page resumes your solo game.
 - **Play a friend.** Choose **Play a friend → Create room → Copy link**. Your friend opens the link and chooses **Join room**. The host plays White and the guest plays Black. You can reconnect from the same browser, or type the room code to join.
-- **Use a technique.** Select a piece type in the Technique deck, choose **Arm technique**, then select a highlighted piece and destination. Choose the king’s own square to cast Domain Expansion. Arrow keys and Enter also work on the board. Your opponent sees a sealed cast. They can predict its target square before the technique is revealed.
+- **Draft your wildcard.** Both players see the same six cards and secretly lock one before White moves. The same card can be picked by both players. Saved games from earlier versions finish under their original rules.
+- **Use a technique.** Select a technique in the Technique deck, choose **Arm technique**, then select a highlighted piece and destination. Choose the king’s own square to cast Domain Expansion. Arrow keys and Enter also work on the board. Your opponent sees a sealed cast. They can predict its target square before the technique is revealed.
+
+## The wildcard draft
+
+Your card is yours to play once. It takes your entire turn, costs no charges, and cannot be played while you are in check. A wildcard resolves immediately. Charged techniques still give the defender their usual prediction window. If your technique is on cooldown, you still owe an ordinary move after using a wildcard.
+
+| Wildcard | What happens on the board |
+| --- | --- |
+| **Kamui Rift** | Send a friendly or enemy non-king into another dimension. Its square stays empty and reserved. Sliding pieces can see through it. The displaced piece returns to that square after the next two individual turns, one by each player. |
+| **Noble Protection** | Ward one friendly non-king for the rest of its life. Enemy charged attacks and hostile wildcards cannot target it. An ordinary chess capture still takes it. |
+| **Power Trade** | Privately exchange the charged techniques of two friendly pieces of different types. The pair keep their ordinary moves and carry the exchange with them. Used techniques stay spent. A king can trade, but cannot stake itself in a borrowed Royal Tribunal. |
+| **Absolute Zero** | Freeze an enemy non-king for its next turn. It cannot move or cast. It still attacks its usual squares, so a frozen rook still guards its file. |
+| **Repulse** | Use a friendly non-king to shove an adjacent enemy non-king one square directly away, into an empty square. The shoving piece stays put. |
+| **Relay** | Exchange the positions of two adjacent friendly non-kings. Both pieces keep their identities. Neither Relay nor Repulse may put a pawn on either back rank. |
+
+**Try the pawn trick with a friend.** As White, draft Power Trade and exchange the pawn on **b2** with the bishop on **c1**. Have Black play **a7–a6**. Arm **Phase Lance** on the pawn. It can reach the **h8 rook** through the **g7 pawn**. If Black lets the cast through, the rook falls and your pawn snaps back to **b2**. Ordinary pawn moves to the back rank still promote. Your opponent sees that Power Trade was played, but the identity of the two pieces stays secret.
 
 ## The mind game
 
@@ -24,7 +40,7 @@ Try it with a friend. Play **1. e3 d5**, arm the white queen on **d1** and targe
 
 ## Rules
 
-Each player gets **three charges for the entire match**. Each piece type may cast once per side, shared across all pieces of that type. A cast uses the entire turn. After casting, that side must play a normal move before casting again.
+Each player gets **three charges for the entire match**. Each of the six techniques may be cast once per side, shared across the original and traded holders of that technique. A cast uses the entire turn. After casting, that side must play a normal move before casting again.
 
 | Piece | Technique | Charges | Move |
 | --- | --- | --- | --- |
@@ -57,7 +73,7 @@ The server accepts `HOST`, `PORT` and `ROOM_DB`. Rooms persist in `data/rooms.sq
 node --test tests/*.test.mjs
 ```
 
-- `public/game/engine.js` defines the rules for the board, bot and server. Tests cover standard chess move counts, all six techniques, king safety and draws.
+- `public/game/engine.js` defines the rules for the board, bot and server. Tests cover standard chess move counts, techniques, wildcards, king safety and draws.
 - `public/game/bot.js` searches standard moves and techniques together using iterative deepening, alpha-beta search, a transposition table and tactical quiescence. Apex has a 3.6-second search budget in a browser worker. Tests cover teleport mate, defending against teleport mate, a Phase Lance capture and underpromotion. The bot has no established Elo rating.
 - `public/game/encounter.js` handles cast commitments, counter windows and shared duel clocks. The room server keeps the committed move private until the reveal.
 - `lib/rooms.js` owns seats and validates every move against the current position. Revision checks handle competing moves. The invitation contains a room code. Seat credentials stay in each player’s browser and are stored as hashes on the server.

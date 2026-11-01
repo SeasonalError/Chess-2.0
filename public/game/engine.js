@@ -4,8 +4,8 @@ export const POWERS = {
   p: {name: 'Vector Step', cost: 1, description: 'Slide one file sideways into an empty square.'},
   n: {name: 'Rift Jump', cost: 1, description: 'Teleport exactly two squares along a rank or file to an empty square.'},
   b: {name: 'Phase Lance', cost: 1, description: 'Pass through one piece diagonally. Land beyond it or capture the first enemy beyond it.'},
-  r: {name: 'Iron Vault', cost: 1, description: 'Vault the first friendly piece on a rank or file and land on the empty square immediately beyond it.'},
-  q: {name: 'Mirror Step', cost: 1, description: 'Teleport exactly two squares diagonally to an empty square, ignoring blockers.'},
+  r: {name: 'Aegis', cost: 1, description: 'Shield another allied piece, except the king, up to three squares along a rank or file through blockers. It cannot be captured on the next reply. The rook stays put.'},
+  q: {name: 'Royal Tribunal', cost: 2, description: 'Challenge an enemy piece other than the king within four squares on a rank or file, through blockers. Win to remove it. Lose or tie and your queen falls. The queen stays put.'},
   k: {name: 'Domain Expansion', cost: 2, description: 'Stay in place. The opponent cannot land on any of the eight surrounding squares on their next turn.'},
 };
 
@@ -30,7 +30,6 @@ const steps = directions => table(sq => directions.map(([r,f]) => shift(sq, r, f
 const kingSteps = steps(allDirs);
 const knightSteps = steps(knightDirs);
 const knightJumps = steps(orthogonal.map(([r,f]) => [2*r, 2*f]));
-const queenSteps = steps(diagonal.map(([r,f]) => [2*r, 2*f]));
 const pawnSideways = steps([[0,1], [0,-1]]);
 const pawnAttacks = {w: steps([[-1,1], [-1,-1]]), b: steps([[1,1], [1,-1]])};
 const rays = table(sq => allDirs.map(([dr,df]) => {
@@ -51,12 +50,12 @@ export function initialState() {
   return {
     board: [...rank('rnbqkbnr'), ...rank('pppppppp'), ...Array(32).fill(null), ...rank('PPPPPPPP'), ...rank('RNBQKBNR')],
     turn: WHITE, castling:'KQkq', ep:null, pawnNoDouble:{w:null,b:null}, halfmove:0, fullmove:1,
-    energy:{w:3,b:3}, spent:{w:[],b:[]}, cooldown:{w:false,b:false}, domain:null,
+    energy:{w:3,b:3}, spent:{w:[],b:[]}, cooldown:{w:false,b:false}, domain:null, shield:null, counters:{w:2,b:2},
     history:[],
   };
 }
 
-function attacked(board, sq, by) {
+export function attacked(board, sq, by) {
   const upper = by === WHITE;
   for (const from of pawnAttacks[other(by)][sq]) if (board[from] === (upper ? 'P' : 'p')) return true;
   for (const from of knightSteps[sq]) if (board[from] === (upper ? 'N' : 'n')) return true;
@@ -77,6 +76,12 @@ function attacked(board, sq, by) {
 export function inCheck(state, side = state.turn) {
   const king = state.board.indexOf(colored('k',side));
   return king === -1 || attacked(state.board,king,other(side));
+}
+export function counterCount(state, side) {
+  return state.counters?.[side] ?? 2;
+}
+function protectedSquare(state, sq, mover) {
+  return state.shield?.side === other(mover) && state.shield.square === sq;
 }
 function sealed(domain, sq, mover) {
   return domain && domain.side !== mover && kingSteps[domain.center].includes(sq);
@@ -119,17 +124,28 @@ function generate(state, tacticalOnly, first) {
   const checked = attacked(board,king,enemy);
   const capturesOnly = tacticalOnly && !checked;
 
+  function add(move) {
+    moves.push(move);
+    return first;
+  }
+  function safeWithout(square) {
+    const saved = board[square];
+    board[square] = null;
+    const safe = !attacked(board,king,enemy);
+    board[square] = saved;
+    return safe;
+  }
   function consider(move) {
     const {from,to} = move, piece = original[from], target = original[to];
     if (from !== to && target && (owner(target) === side || target.toLowerCase() === 'k')) return false;
     if (capturesOnly && !target && !move.enPassant && !move.promotion) return false;
-    if (sealed(state.domain, to, side)) return false;
+    const victim = move.enPassant ? to + (side === WHITE ? 8 : -8) : to;
+    if (protectedSquare(state,victim,side) || sealed(state.domain, to, side)) return false;
     if (move.castle && sealed(state.domain, from + (move.castle === 'K' ? 1 : -1), side)) return false;
     writeMove(board, move, piece, side);
     const legal = !attacked(board, from === king ? to : king, enemy);
     undoTrial(board, move, piece, target, side);
-    if (legal) moves.push(move);
-    return legal && first;
+    return legal && add(move);
   }
 
   function pawnMove(from, to, enPassant = false) {
@@ -177,10 +193,11 @@ function generate(state, tacticalOnly, first) {
       }
     }
 
-    if (!available(state,side,type)) continue;
-    if (capturesOnly && type !== 'b') continue;
-    if (type === 'p' || type === 'n' || type === 'q') {
-      const destinations = type === 'p' ? pawnSideways[from] : type === 'n' ? knightJumps[from] : queenSteps[from];
+    // A counter leaves our board unchanged, so no cast can answer check.
+    if (checked || !available(state,side,type)) continue;
+    if (capturesOnly && type !== 'b' && type !== 'q') continue;
+    if (type === 'p' || type === 'n') {
+      const destinations = type === 'p' ? pawnSideways[from] : knightJumps[from];
       for (const to of destinations) if (!original[to] && consider({from,to,power:type})) return moves;
     } else if (type === 'k') {
       if (consider({from,to:from,power:'k'})) return moves;
@@ -194,13 +211,18 @@ function generate(state, tacticalOnly, first) {
           } else if (original[to]) passed = true;
         }
       }
-    } else if (type === 'r') {
+    } else if (type === 'r' || type === 'q') {
+      // These techniques target pieces without landing on their squares.
+      const tribunal = type === 'q', range = tribunal ? 4 : 3;
+      if (tribunal && !safeWithout(from)) continue;
       for (let d = 0; d < 4; d++) {
         const ray = rays[from][d];
-        const blocker = ray.findIndex(sq => original[sq]);
-        if (blocker < 0 || owner(original[ray[blocker]]) !== side || blocker + 1 >= ray.length) continue;
-        const to = ray[blocker+1];
-        if (!original[to] && consider({from,to,power:'r'})) return moves;
+        for (let i = 0; i < ray.length && i < range; i++) {
+          const to = ray[i], target = original[to];
+          if (!target || target.toLowerCase() === 'k' || owner(target) !== (tribunal ? enemy : side)) continue;
+          if (tribunal && (protectedSquare(state,to,side) || !safeWithout(to))) continue;
+          if (add({from,to,power:type})) return moves;
+        }
       }
     }
   }
@@ -218,7 +240,7 @@ function effectiveEp(state) {
   const to = state.ep, side = state.turn;
   if (to === null || sealed(state.domain,to,side)) return '-';
   const board = state.board.slice(), victim = to + (side === WHITE ? 8 : -8);
-  if (board[to] || board[victim] !== colored('p',other(side))) return '-';
+  if (board[to] || protectedSquare(state,victim,side) || board[victim] !== colored('p',other(side))) return '-';
   for (const from of pawnAttacks[other(side)][to]) {
     if (board[from] !== colored('p',side)) continue;
     const move = {from,to,enPassant:true}, piece = board[from];
@@ -240,41 +262,70 @@ export function keyOf(state) {
   let board = '';
   for (const piece of state.board) board += piece || '.';
   const domain = state.domain ? state.domain.side + state.domain.center : '-';
-  return [board,state.turn,state.castling,effectiveEp(state),resourceKey(state,WHITE),resourceKey(state,BLACK),domain,state.pawnNoDouble?.w ?? '-',state.pawnNoDouble?.b ?? '-'].join('|');
+  const key = [board,state.turn,state.castling,effectiveEp(state),resourceKey(state,WHITE),resourceKey(state,BLACK),domain,state.pawnNoDouble?.w ?? '-',state.pawnNoDouble?.b ?? '-'].join('|');
+  const white = counterCount(state,WHITE), black = counterCount(state,BLACK);
+  // Retain compatibility with position keys in existing saved game histories.
+  if (white === 2 && black === 2 && !state.shield) return key;
+  const shield = state.shield ? state.shield.side + state.shield.square : '-';
+  return [key,white,black,shield].join('|');
 }
 
 const homeRooks = {0:'q',7:'k',56:'Q',63:'K'};
-function remainingCastling(state, move, type, target) {
+function advance(state, move, {countered = false, queenWon = true, counterSpent = false} = {}) {
+  const {from,to,power} = move, side = state.turn, enemy = other(side);
+  const board = state.board.slice(), piece = board[from], type = piece.toLowerCase();
+  let removed = null, moved = false;
+  if (!countered) {
+    if (power === 'q') {
+      removed = queenWon ? to : from;
+      board[removed] = null;
+    } else if (power !== 'r' && from !== to) {
+      moved = true;
+      if (move.enPassant) removed = to + (side === WHITE ? 8 : -8);
+      else if (board[to]) removed = to;
+      writeMove(board,move,piece,side);
+    }
+  }
   let rights = state.castling;
-  if (!rights) return rights;
-  if (type === 'k' && move.from !== move.to) rights = rights.replace(state.turn === WHITE ? /[KQ]/g : /[kq]/g,'');
-  if (type === 'r' && homeRooks[move.from]) rights = rights.replace(homeRooks[move.from],'');
-  if (target?.toLowerCase() === 'r' && homeRooks[move.to]) rights = rights.replace(homeRooks[move.to],'');
-  return rights;
-}
-
-export function playLegal(state, move) {
-  const {from,to,power} = move, side = state.turn, board = state.board.slice(), piece = board[from], type = piece.toLowerCase();
-  const target = from === to ? null : board[to], capture = Boolean(target || move.enPassant);
-  writeMove(board,move,piece,side);
-  const rights = remainingCastling(state,move,type,target);
-  const irreversible = type === 'p' || capture || power || rights !== state.castling;
+  if (rights) {
+    if (moved && type === 'k') rights = rights.replace(side === WHITE ? /[KQ]/g : /[kq]/g,'');
+    if (moved && type === 'r' && homeRooks[from]) rights = rights.replace(homeRooks[from],'');
+    if (removed !== null && state.board[removed]?.toLowerCase() === 'r' && homeRooks[removed]) {
+      rights = rights.replace(homeRooks[removed],'');
+    }
+  }
+  let counters = state.counters;
+  if (counters?.w == null || counters?.b == null) counters = {w:counterCount(state,WHITE),b:counterCount(state,BLACK)};
+  if (counterSpent) {
+    if (counters[enemy] <= 0) throw new Error('No counters remaining');
+    counters = {...counters,[enemy]:counters[enemy]-1};
+  }
+  const pawnMoved = moved && type === 'p';
+  const irreversible = pawnMoved || removed !== null || power || rights !== state.castling;
   // A pawn that steps sideways on its starting rank has already taken its first move.
-  let pawnNoDouble = state.pawnNoDouble;
-  if (pawnNoDouble?.w === from || pawnNoDouble?.w === to) pawnNoDouble = {...pawnNoDouble,w:null};
-  if (pawnNoDouble?.b === from || pawnNoDouble?.b === to) pawnNoDouble = {...pawnNoDouble,b:null};
-  if (power === 'p' && (to >> 3) === (side === WHITE ? 6 : 1)) pawnNoDouble = {...pawnNoDouble,[side]:to};
+  let pawnNoDouble = state.pawnNoDouble ?? {w:null,b:null};
+  if (pawnNoDouble.w != null && board[pawnNoDouble.w] !== 'P') pawnNoDouble = {...pawnNoDouble,w:null};
+  if (pawnNoDouble.b != null && board[pawnNoDouble.b] !== 'p') pawnNoDouble = {...pawnNoDouble,b:null};
+  if (pawnMoved && power === 'p' && (to >> 3) === (side === WHITE ? 6 : 1)) pawnNoDouble = {...pawnNoDouble,[side]:to};
   return {
-    board,turn:other(side),castling:rights,pawnNoDouble,
-    ep:type === 'p' && !power && Math.abs(to-from) === 16 ? (to+from)/2 : null,
-    halfmove:type === 'p' || capture ? 0 : state.halfmove+1,
+    board,turn:enemy,castling:rights,pawnNoDouble,counters,
+    ep:pawnMoved && !power && Math.abs(to-from) === 16 ? (to+from)/2 : null,
+    halfmove:pawnMoved || removed !== null ? 0 : state.halfmove+1,
     fullmove:state.fullmove + (side === BLACK ? 1 : 0),
     energy:power ? {...state.energy,[side]:state.energy[side]-POWERS[power].cost} : state.energy,
     spent:power ? {...state.spent,[side]:[...state.spent[side],power]} : state.spent,
     cooldown:state.cooldown[side] !== Boolean(power) ? {...state.cooldown,[side]:Boolean(power)} : state.cooldown,
-    domain:power === 'k' ? {side,center:from} : null,
+    domain:power === 'k' && !countered ? {side,center:from} : null,
+    shield:power === 'r' && !countered ? {side,square:to} : null,
     history:irreversible ? [] : [...state.history,keyOf(state)],
   };
+}
+export function resolveCast(state, generatedMove, outcome = {}) {
+  if (!generatedMove.power) throw new Error('Expected a technique');
+  return advance(state,generatedMove,outcome);
+}
+export function playLegal(state, move) {
+  return advance(state,move);
 }
 
 export function applyMove(state, input) {
@@ -326,6 +377,7 @@ export function result(state, moves) {
 export function labelMove(state, move) {
   if (move.castle) return move.castle === 'K' ? 'O-O' : 'O-O-O';
   if (move.power === 'k') return 'Domain Expansion · ' + coord(move.from);
+  if (move.power === 'r' || move.power === 'q') return POWERS[move.power].name + ' · ' + coord(move.from) + ' → ' + coord(move.to);
   const type = state.board[move.from].toUpperCase(), piece = type === 'P' ? '' : type;
   const separator = state.board[move.to] || move.enPassant ? '×' : '–';
   const notation = piece + coord(move.from) + separator + coord(move.to) + (move.promotion ? '=' + move.promotion.toUpperCase() : '');

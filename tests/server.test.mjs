@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 
-test('standalone HTTP arena synchronizes a powered move and a normal reply', async t => {
+test('standalone HTTP arena keeps a cast secret, resolves a pass and synchronizes the reply', async t => {
   const server = spawn(process.execPath, ['server.mjs'], {
     cwd: new URL('../', import.meta.url),
     env: {...process.env, HOST: '127.0.0.1', PORT: '0', ROOM_DB: ':memory:'},
@@ -37,7 +37,16 @@ test('standalone HTTP arena synchronizes a powered move and a normal reply', asy
   const path = '/' + host.code;
   const guest = await request(path + '/join', 'POST', null, {});
   await request(path + '/move', 'POST', host.token, {revision: guest.revision, move: {from:57, to:41, power:'n'}});
-  const seen = await request(path, 'GET', guest.token);
+  const pending = await request(path, 'GET', guest.token);
+  assert.equal(pending.encounter.phase, 'counter');
+  assert.equal(pending.state.board[57], 'N');
+  assert.equal(pending.state.board[41], null);
+  assert.equal(pending.log.length, 0);
+  assert.equal(pending.encounter.from, undefined);
+  assert.equal(pending.encounter.to, undefined);
+  const seen = await request(path + '/counter', 'POST', guest.token, {
+    revision: pending.revision, encounterId: pending.encounter.id, square: null,
+  });
   assert.equal(seen.state.board[41], 'N');
   assert.equal(seen.state.energy.w, 2);
   await request(path + '/move', 'POST', guest.token, {revision: seen.revision, move: {from:12, to:28}});

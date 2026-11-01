@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialState, coord, keyOf, legalMoves, hasLegalMove, inCheck, applyMove, playLegal, result, labelMove, POWERS} from '../public/game/engine.js';
+import {initialState, coord, keyOf, legalMoves, hasLegalMove, inCheck, applyMove, playLegal, result, labelMove, resolveCast, counterCount, POWERS} from '../public/game/engine.js';
 
 const sq = name => 'abcdefgh'.indexOf(name[0]) + (8 - Number(name[1]))*8;
 const move = (from,to,extra = {}) => ({from:sq(from),to:sq(to),...extra});
@@ -66,17 +66,126 @@ test('a technique cannot capture the king or bypass ordinary check', () => {
   assert(inCheck(checked));
   assert.deepEqual(destinations(checked,'e1','k'),[]);
 });
-test('rook vault only clears the first friendly blocker and only to the next empty square', () => {
-  let state = position('7k/8/3r4/8/1P1R1N2/3P4/8/K7');
-  assert.deepEqual(destinations(state,'d4','r'),['a4','d2','g4']);
-  state.board[sq('g4')] = 'p';
-  assert(!destinations(state,'d4','r').includes('g4'));
+test('Aegis targets allied non-kings within three orthogonal squares, including beyond blockers', () => {
+  const state = position('7k/3P4/3r4/8/N2R1N2/3P4/8/3K4');
+  assert.deepEqual(destinations(state,'d4','r'),['a4','d3','d7','f4']);
+  const after = play(state,'d4','d7',{power:'r'});
+  assert.deepEqual(after.board,state.board);
+  assert.deepEqual(after.shield,{side:'w',square:sq('d7')});
+  assert.equal(after.halfmove,1);
+  assert.equal(after.energy.w,2);
 });
-test('knight and queen teleports have fixed range, ignore blockers and only land on empties', () => {
-  let state = position('7k/8/3p4/8/3N4/8/8/K7');
+test('Aegis blocks normal, en passant, Phase Lance and Tribunal captures but leaves checks unchanged', () => {
+  const state = position('7k/8/p7/1b6/2p5/3P3q/1R6/K7 b - -');
+  const original = destinations(state,'h3','q');
+  assert(original.includes('d3'));
+  assert(destinations(state,'b5','b').includes('d3'));
+  assert(destinations(state,'c4',undefined).includes('d3'));
+  state.shield = {side:'w',square:sq('d3')};
+  assert(!destinations(state,'h3','q').includes('d3'));
+  assert(!destinations(state,'b5','b').includes('d3'));
+  assert(!destinations(state,'c4',undefined).includes('d3'));
+  const replied = play(state,'a6','a5');
+  assert.equal(replied.shield,null);
+  const ep = position('7k/8/8/3pP3/8/8/8/K7 w - d6');
+  assert(legalMoves(ep).some(m=>m.enPassant));
+  ep.shield = {side:'b',square:sq('d5')};
+  assert(!legalMoves(ep).some(m=>m.enPassant));
+  assert.equal(keyOf(ep),keyOf({...ep,ep:null}));
+  const checked = position('7k/8/8/8/8/8/r7/K7');
+  checked.shield = {side:'b',square:sq('a2')};
+  assert(inCheck(checked));
+  assert(!destinations(checked,'a1',undefined).includes('a2'));
+});
+test('knight teleport has fixed range, ignores blockers and only lands on empty squares', () => {
+  const state = position('7k/8/3p4/8/3N4/8/8/K7');
   assert.deepEqual(destinations(state,'d4','n'),['b4','d2','f4']);
-  state = position('7k/8/5p2/4P3/3Q4/8/8/K7');
-  assert.deepEqual(destinations(state,'d4','q'),['b2','b6','f2']);
+});
+test('Tribunal targets only an enemy non-king within four orthogonal squares, through blockers', () => {
+  const state = position('3r3k/8/3P4/7p/N2Qp2n/8/8/K7');
+  assert.deepEqual(destinations(state,'d4','q'),['d8','e4','h4']);
+  state.board[sq('h4')] = 'k';
+  state.board[sq('h8')] = 'p';
+  assert(!destinations(state,'d4','q').includes('h4'));
+  const far = position('7k/8/8/1Q4n1/8/8/8/K7');
+  assert(!destinations(far,'b5','q').includes('g5'));
+});
+test('Tribunal is forbidden if either the loss or the win would expose the caster king', () => {
+  const pinnedQueen = position('4r2k/8/8/8/8/8/4Q2p/4K3');
+  assert(!inCheck(pinnedQueen));
+  assert(!destinations(pinnedQueen,'e2','q').includes('h2'));
+  const pinnedVictim = position('4r2k/8/8/8/8/Q3n3/8/4K3');
+  assert(!inCheck(pinnedVictim));
+  assert(!destinations(pinnedVictim,'a3','q').includes('e3'));
+  const checked = position('4r2k/8/8/8/8/3P4/2N5/4K3');
+  assert(inCheck(checked));
+  assert(!legalMoves(checked).some(m=>m.power));
+});
+test('Tribunal has distinct win, loss and cancellation transitions without moving its pieces', () => {
+  const state = position('4k2r/8/7p/8/7Q/8/8/K7 w k -');
+  state.halfmove = 22;
+  const cast = legalMoves(state).find(m=>m.power==='q' && m.to===sq('h8'));
+  assert(cast);
+  const snapshot = JSON.stringify(state);
+  const win = resolveCast(state,cast);
+  assert.deepEqual(win,playLegal(state,cast));
+  assert.equal(win.board[cast.from],'Q');
+  assert.equal(win.board[cast.to],null);
+  assert.equal(win.castling,'');
+  assert.equal(win.halfmove,0);
+  const lost = resolveCast(state,cast,{queenWon:false,counterSpent:true});
+  assert.equal(lost.board[cast.from],null);
+  assert.equal(lost.board[cast.to],'r');
+  assert.equal(lost.castling,'k');
+  assert.equal(lost.halfmove,0);
+  const stopped = resolveCast(state,cast,{countered:true,counterSpent:true});
+  assert.deepEqual(stopped.board,state.board);
+  assert.equal(stopped.castling,'k');
+  assert.equal(stopped.halfmove,23);
+  for (const after of [win,lost,stopped]) {
+    assert.equal(after.turn,'b');
+    assert.deepEqual(after.spent.w,['q']);
+    assert.equal(after.energy.w,1);
+    assert.equal(after.cooldown.w,true);
+    assert.deepEqual(after.history,[]);
+  }
+  assert.equal(win.counters.b,2);
+  assert.equal(lost.counters.b,1);
+  assert.equal(stopped.counters.b,1);
+  assert.equal(JSON.stringify(state),snapshot);
+});
+test('countering a pawn preserves its prior status and expires transient effects', () => {
+  const state = position('7k/8/8/8/8/8/1P6/K7 w - f6');
+  state.halfmove = 17;
+  state.domain = {side:'b',center:sq('h8')};
+  state.shield = {side:'b',square:sq('g7')};
+  const cast = legalMoves(state).find(m=>m.power==='p');
+  const next = resolveCast(state,cast,{countered:true,counterSpent:true});
+  assert.deepEqual(next.board,state.board);
+  assert.deepEqual(next.pawnNoDouble,state.pawnNoDouble);
+  assert.equal(next.halfmove,18);
+  assert.equal(next.ep,null);
+  assert.equal(next.shield,null);
+  assert.equal(next.domain,null);
+  assert.deepEqual(next.counters,{w:2,b:1});
+  const reply = play(next,'h8','h7');
+  assert(destinations(reply,'b2',undefined).includes('b4'));
+  assert.throws(()=>resolveCast({...state,counters:{w:1,b:0}},cast,{counterSpent:true}));
+});
+test('legacy states get two counters per side, no shield and compatible repetition keys', () => {
+  const state = initialState();
+  const old = {...state};
+  delete old.shield;
+  delete old.counters;
+  assert.equal(counterCount(old,'b'),2);
+  assert.equal(keyOf(old),keyOf(state));
+  assert.deepEqual(legalMoves(old),legalMoves(state));
+  const cast = legalMoves(old).find(m=>m.power==='n');
+  const next = resolveCast(old,cast,{countered:true,counterSpent:true});
+  assert.deepEqual(next.counters,{w:2,b:1});
+  assert.equal(next.shield,null);
+  assert.notEqual(keyOf({...old,counters:{w:1,b:2}}),keyOf(old));
+  assert.notEqual(keyOf({...old,shield:{side:'b',square:sq('g8')}}),keyOf(old));
 });
 test('pawn can step sideways into empty squares but cannot double-step after doing so', () => {
   let state = position('7k/8/8/8/8/8/1PP5/K7');
@@ -95,7 +204,7 @@ test('techniques have independent per-side charges, type limits, and recovery tu
   assert(!legalMoves(state).some(m => m.power));
   state = play(state,'e2','e4');
   state = play(state,'e7','e5');
-  assert(legalMoves(state).some(m => m.power === 'q'));
+  assert(legalMoves(state).some(m => m.power === 'b'));
   assert(!legalMoves(state).some(m => m.power === 'n'));
   state = play(state,'e1','e1',{power:'k'});
   assert.equal(state.energy.w,0);
@@ -129,7 +238,7 @@ test('castling respects attacked transit squares, lost rights and powered rook c
   state = play(state,'e5','h8',{power:'b'});
   assert.equal(state.castling,'');
   state = position('7k/8/8/8/8/8/7P/4K2R w K -');
-  assert.equal(play(state,'h1','h3',{power:'r'}).castling,'');
+  assert.equal(play(state,'h1','h2',{power:'r'}).castling,'K');
 });
 test('en passant and promotion account for discovered attacks and all four promotion choices', () => {
   let state = position('4r2k/8/8/3pP3/8/8/8/4K3 w - d6');

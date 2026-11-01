@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111015">
-  <meta name="description" content="An anime chess duel with six limited-use techniques, a tactical bot and online rooms.">
+  <meta name="description" content="An anime chess duel with limited-use techniques, hidden casts, counter predictions, and the Royal Tribunal.">
   <title>Riftbound · Chess 2.0</title>
   <link rel="icon" href="./favicon.svg">
   <link rel="stylesheet" href="./arena.css">
@@ -45,6 +45,7 @@
           <div><i class="live-dot"></i><span>LIVE BOARD</span><span class="bar-slash">/</span><span class="board-mode" id="board-mode">BOT DUEL</span></div>
           <button id="flip" class="mini-btn" title="Flip board" aria-label="Flip board"><svg aria-hidden="true"><use href="./art/ui.svg#flip"/></svg><span>Flip</span></button>
         </div>
+        <section id="encounter-panel" class="encounter panel" aria-label="Technique encounter" tabindex="-1" hidden></section>
         <div id="north" class="player north"></div>
         <div class="board-frame">
           <div id="board" class="board" role="group" aria-label="Chessboard"></div>
@@ -87,7 +88,7 @@
         </div>
       </aside>
     </div>
-    <footer><span>RIFTBOUND <b>/</b> CHESS 2.0</span><span>RULESET v1.0</span></footer>
+    <footer><span>RIFTBOUND <b>/</b> CHESS 2.0</span><span>RULESET v1.1</span></footer>
   </main>
   <dialog id="modal">
     <div class="dialog-inner">

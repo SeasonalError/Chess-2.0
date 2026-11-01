@@ -22,6 +22,10 @@ export function createEncounterPanel(panel, {counter, ready, tap}) {
       // Native click is shared by touch, mouse, and assistive technologies. For
       // physical keys count once on keydown and suppress the synthetic click.
       nodes.tap.onclick = tap;
+      if (!document.querySelector('dialog[open]') &&
+          (document.activeElement === document.body || panel.contains(document.activeElement))) {
+        nodes.tap.focus({preventScroll:true});
+      }
       nodes.tap.onkeydown = event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
@@ -38,7 +42,7 @@ export function createEncounterPanel(panel, {counter, ready, tap}) {
   function write(key, value) {
     if (nodes[key] && nodes[key].textContent !== value) nodes[key].textContent = value;
   }
-  return function draw(encounter, side, remainingCounters, square, now, busy, pendingTaps = 0) {
+  return function draw(encounter, side, remainingCounters, square, now, busy, pendingTaps = 0, targetName = 'piece') {
     panel.hidden = !encounter;
     if (!encounter) { currentKey = ''; return; }
     const {id, phase, caster} = encounter;
@@ -50,7 +54,7 @@ export function createEncounterPanel(panel, {counter, ready, tap}) {
         '<button class="primary" data-field="confirm">Lock prediction</button>' +
         '<button class="secondary" data-field="pass">Pass</button></div>' : ''));
       write('kicker', 'COUNTER WINDOW');
-      write('title', defending ? 'Predict the landing square' : 'Cast sealed');
+      write('title', defending ? 'Predict the target square' : 'Cast sealed');
       write('help', defending ?
         'A technique is incoming. Pick any board square and lock your guess, or pass to conserve a counter.' :
         'Your opponent can predict one square before the technique is revealed.');
@@ -81,8 +85,8 @@ export function createEncounterPanel(panel, {counter, ready, tap}) {
     write('kicker', 'ROYAL TRIBUNAL / ' + (attacking ? 'ATTACKER' : 'DEFENDER'));
     write('title', waiting ? 'Ready for the tribunal?' : beforeStart ? 'Prepare to strike' :
       finished ? 'Resolving the tribunal' : 'Strike for 10 seconds');
-    const stakes = attacking ? 'Win to take the piece on ' + coord(encounter.to) + '. Lose and your queen falls.' :
-      'Win to save your piece on ' + coord(encounter.to) + ' and destroy the attacking queen.';
+    const stakes = attacking ? 'Win to take the ' + targetName + ' on ' + coord(encounter.to) + '. Lose and your queen falls.' :
+      'Win to save your ' + targetName + ' on ' + coord(encounter.to) + ' and destroy the attacking queen.';
     write('help', waiting ? stakes : beforeStart ? 'The duel begins together for both players.' :
       finished ? 'Waiting for the final score.' : 'Tap the button, or press and release Enter or Space.');
     if (waiting) {

@@ -1,6 +1,13 @@
 import {
-  initialState, legalMoves, applyMove, labelMove, coord, POWERS, inCheck, result,
+  initialState, legalMoves, coord, POWERS, inCheck,
 } from './engine.js';
+
+import {
+  createMatch, moveMatch, counterMatch, readyMatch, tapMatch, advanceMatch, viewMatch,
+  COUNTER_MS, MAX_BATCH,
+} from './encounter.js';
+import {chooseCounterSquare, duelTapSchedule} from './bot.js';
+import {createEncounterPanel} from './arena-encounter-ui.js';
 
 const el = id => document.getElementById(id);
 const names = {p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King'};
@@ -28,6 +35,15 @@ let room = null, token = '', selected = null, armed = false, technique = 'n', fl
 let worker = null, job = 0, botError = false, busy = false, pollBusy = false, offline = false;
 let sound = !!storage.read('sound'), audio = null, flash = null, flashTimer, toastTimer;
 let roomEpoch = 0, roving = 52;
+let solo = createMatch(game), encounter = null, prediction = null, botPlan = null;
+let clockOffset = 0, lastPollAt = 0, tapQueue = null;
+const opponent = color => color === 'w' ? 'b' : 'w';
+const clock = () => Date.now() + (mode === 'room' ? clockOffset : 0);
+const encounterPanel = createEncounterPanel(el('encounter-panel'), {
+  counter: pass => answerEncounter(pass ? null : prediction),
+  ready: () => answerEncounter('ready'),
+  tap: strike,
+});
 
 function toast(message) {
   el('toast').textContent = message;
@@ -72,9 +88,12 @@ function selectRules() {
   show('Rules of the rift',
     '<p class="dialog-text">Checkmate wins. Your pieces move as in chess until you spend a charge.</p>' +
     '<ul class="rules-list"><li>Each side starts with <b>three charges for the entire duel</b>. Each piece type can cast its technique once across your army.</li>' +
-    '<li>A technique takes your entire turn. Play a normal move before casting again. Most techniques cost one charge. Domain Expansion costs two.</li>' +
+    '<li>A technique takes your entire turn. Play a normal move before casting again. Royal Tribunal and Domain Expansion cost two charges. The other techniques cost one.</li>' +
     '<li>Select a piece for normal moves. To cast, choose its type in the deck, arm the technique, then choose a highlighted piece and destination. For Domain Expansion, choose the king’s own square.</li>' +
-    '<li>Check uses ordinary chess attacks. You must escape check, and cannot expose your king with a technique. Castling, en passant and all four promotions are available.</li>' +
+    '<li>A cast sends a sealed signal. The defender has 15 seconds to predict any one destination square. A correct prediction cancels the cast. Each side has two counter seals per game. Passing or timing out saves the seal. A canceled cast still spends the caster’s charge, technique and turn.</li>' +
+    '<li>Royal Tribunal challenges an enemy non-king up to four squares along the queen’s rank or file, through intervening pieces. If the challenge lands, ready up and tap for ten seconds. More taps for the attacker removes the target. A defender win or tie removes the attacking queen.</li>' +
+    '<li>Aegis guards an allied non-king up to three squares along the rook’s rank or file through intervening pieces. The guard lasts for the enemy reply. The rook stays on its square.</li>' +
+    '<li>Check uses ordinary chess attacks. You must escape check with a normal move. Castling, en passant and all four promotions are available.</li>' +
     '<li>Stalemate, threefold repetition, fifty moves by each side without a pawn move or capture, and insufficient mating material draw automatically.</li></ul>' +
     '<div class="dlg-actions"><button id="view-codex" class="secondary">Technique codex</button><button class="primary" id="ok">Enter arena</button></div>',
     'FIELD MANUAL / 01');
@@ -86,7 +105,7 @@ function selectCodex() {
     '<div class="codex-item">' + sprite(type.toUpperCase()) +
     '<div><b>' + power.name + '</b><small>' + names[type].toUpperCase() + ' · ' + power.cost +
     ' CHG</small><p>' + power.description + '</p></div></div>');
-  show('Technique codex', '<p class="dialog-text">Six techniques. Three charges. Both sides use the same deck.</p>' +
+  show('Technique codex', '<p class="dialog-text">Six techniques, three charges and two counter seals per side. All casts can be interrupted by predicting their target square.</p>' +
     '<div class="codex-list">' + entries.join('') + '</div>', 'FIELD MANUAL / 02');
 }
 function selectNew() {
@@ -110,49 +129,173 @@ function stopWorker() {
 }
 function resetSelection() { selected = null; armed = false; }
 function saveSolo() {
-  if (mode === 'bot') storage.write('solo', {game, log, side, level, outcome});
+  if (mode === 'bot') storage.write('solo', {match:solo, side, level, botPlan});
 }
 function mine() {
-  return !busy && !outcome && side === game.turn && (mode === 'bot' || room?.ready);
+  return !encounter && !busy && !outcome && side === game.turn && (mode === 'bot' || room?.ready);
 }
 function refreshGame() {
-  moves = legalMoves(game);
-  outcome ??= result(game, moves);
+  moves = encounter || outcome ? [] : legalMoves(game);
   render();
 }
 function newBot(color, difficulty) {
   stopWorker();
   roomEpoch++;
   mode = 'bot'; room = null; token = ''; busy = false; offline = false;
-  game = initialState(); log = []; outcome = null; side = color; flipped = side === 'b'; level = difficulty;
+  game = initialState(); solo = createMatch(game); encounter = null; prediction = null; botPlan = null; tapQueue = null; log = []; outcome = null; side = color; flipped = side === 'b'; level = difficulty;
   resetSelection(); technique = 'n';
   history.replaceState(null, '', location.pathname);
   hide(); refreshGame(); saveSolo(); runBot();
 }
 function notePower(move, mover) {
   if (!move?.power) return;
+  if (move.resolution === 'countered') {
+    toast(POWERS[move.power].name + ' countered on ' + coord(move.to));
+    return;
+  }
   const overlay = document.createElement('div');
   overlay.className = 'cast-fx';
   overlay.setAttribute('aria-hidden', 'true');
   overlay.innerHTML = '<img src="./art/' + (mover === side ? 'duelist' : 'oracle') + '.svg" alt="">' +
-    '<div><span>TECHNIQUE ACTIVATED</span><strong>' + POWERS[move.power].name + '</strong></div>';
+    '<div><span>TECHNIQUE REVEALED</span><strong>' + POWERS[move.power].name + '</strong></div>';
   document.querySelector('.cast-fx')?.remove();
   board.parentElement.append(overlay);
   setTimeout(() => overlay.remove(), 850);
   flash = move.to;
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => { flash = null; drawBoard(); }, 650);
-  toast(POWERS[move.power].name);
+  toast(move.duel ? move.label : POWERS[move.power].name);
+}
+// Only the public view reaches the controls and the bot's counter predictor.
+function displayMatch(view, fresh = false) {
+  const oldLength = log.length, previous = encounter;
+  const boardChanged = fresh || oldLength !== view.log.length || view.outcome?.reason !== outcome?.reason ||
+    previous?.id !== view.encounter?.id || previous?.phase !== view.encounter?.phase;
+  game = view.state; log = view.log; outcome = view.outcome; encounter = view.encounter;
+  if (!boardChanged) { paintEncounter(); return; }
+  resetSelection(); prediction = null;
+  if (!encounter || tapQueue?.id !== encounter.id) tapQueue = null;
+  if (!fresh && oldLength < log.length) {
+    const move = log.at(-1);
+    notePower(move, move.side); ping(!!move.power && move.resolution !== 'countered');
+  }
+  refreshGame();
+  if (encounter && mode !== 'room' && modal.open && !el('join-code')) hide();
+  if (encounter && !fresh && !modal.open && (encounter.phase === 'duel' || side !== encounter.caster)) {
+    el('encounter-panel').scrollIntoView({block:'nearest', behavior:'instant'});
+  }
+}
+
+function commitSolo(next, now) {
+  if (next === solo) { paintEncounter(); return; }
+  solo = next;
+  displayMatch(viewMatch(solo, now));
+  saveSolo();
+  runBot();
 }
 function soloMove(move) {
-  const label = labelMove(game, move), moving = game.turn;
-  game = applyMove(game, move);
-  log.push({label, side: moving, from: move.from, to: move.to, power: move.power});
-  resetSelection(); notePower(move, moving); ping(!!move.power);
-  refreshGame(); saveSolo(); runBot();
+  const now = Date.now();
+  commitSolo(moveMatch(solo, game.turn, move, now), now);
 }
+
+// A solo opponent decides its counter from the same pre-cast board a human
+// can see. Duel offsets are fixed once, so reloading cannot reroll a rival.
+function tickSolo(now) {
+  let next = solo;
+  let signal = viewMatch(next, now).encounter;
+  const bot = opponent(side);
+  if (signal?.phase === 'counter' && signal.caster !== bot &&
+      now >= signal.deadline - COUNTER_MS + 900 && now < signal.deadline) {
+    const publicBoard = viewMatch(next, now).state;
+    next = counterMatch(next, bot, chooseCounterSquare(publicBoard, level), now);
+    signal = viewMatch(next, now).encounter;
+  }
+  if (signal?.phase === 'duel' && !signal.ready[bot] && !signal.startsAt && now < signal.readyDeadline) {
+    next = readyMatch(next, bot, now);
+    signal = viewMatch(next, now).encounter;
+  }
+  if (signal?.phase === 'duel' && signal.startsAt) {
+    if (botPlan?.id !== signal.id) {
+      botPlan = {id:signal.id, offsets:duelTapSchedule(level, signal.endsAt - signal.startsAt)};
+      saveSolo();
+    }
+    let seq = signal.lastSeq[bot];
+    while (seq < botPlan.offsets.length) {
+      const at = signal.startsAt + botPlan.offsets[seq];
+      if (at > now || at >= signal.endsAt) break;
+      next = tapMatch(next, bot, {seq:++seq, count:1}, at);
+    }
+  }
+  next = advanceMatch(next, now);
+  if (!next.encounter) botPlan = null;
+  commitSolo(next, now);
+}
+function paintEncounter() {
+  if (outcome) encounter = null;
+  const buffered = tapQueue?.id === encounter?.id && tapQueue ?
+    tapQueue.queued + (tapQueue.flight && encounter.lastSeq?.[side] < tapQueue.flight.seq ? tapQueue.flight.count : 0) : 0;
+  const target = encounter?.phase === 'duel' ? game.board[encounter.to] : null;
+  encounterPanel(encounter, side, game.counters?.[side] ?? 2, prediction, clock(), busy, buffered,
+    target ? names[target.toLowerCase()].toLowerCase() : 'piece');
+}
+function answerEncounter(answer) {
+  if (!encounter || busy) return;
+  const isReady = answer === 'ready';
+  if (!isReady && encounter.caster === side) return;
+  if (mode === 'room') {
+    void roomAction(isReady ? 'ready' : 'counter', {encounterId:encounter.id, ...(isReady ? {} : {square:answer})});
+    return;
+  }
+  const now = Date.now();
+  try {
+    const next = isReady ? readyMatch(solo, side, now) : counterMatch(solo, side, answer, now);
+    commitSolo(next, now);
+    if (encounter) tickSolo(now);
+  } catch (error) { tickSolo(now); toast(error.message); }
+}
+function strike() {
+  const now = clock();
+  if (encounter?.phase !== 'duel' || !encounter.startsAt || now < encounter.startsAt || now >= encounter.endsAt) return;
+  if (mode === 'bot') {
+    commitSolo(tapMatch(solo, side, {seq:encounter.lastSeq[side] + 1, count:1}, now), now);
+    return;
+  }
+  if (tapQueue?.id !== encounter.id) tapQueue = {id:encounter.id, queued:0, flight:null, sending:false, retryAt:0};
+  // Buffer a few genuine presses made during a request. The server caps credit
+  // by elapsed time and discards retransmissions of an acknowledged sequence.
+  if (tapQueue.queued < MAX_BATCH * 2) tapQueue.queued++;
+  paintEncounter(); void flushTapQueue();
+}
+async function flushTapQueue() {
+  const q = tapQueue, epoch = roomEpoch;
+  if (!q || q.sending || mode !== 'room' || !room || encounter?.id !== q.id ||
+      encounter?.phase !== 'duel' || !encounter.endsAt || clock() >= encounter.endsAt || Date.now() < q.retryAt) return;
+  if (q.flight && encounter.lastSeq[side] >= q.flight.seq) q.flight = null;
+  if (!q.flight) {
+    if (!q.queued) return;
+    const count = Math.min(MAX_BATCH, q.queued);
+    q.queued -= count; q.flight = {seq:encounter.lastSeq[side] + 1, count};
+  }
+  const batch = q.flight;
+  q.sending = true;
+  try {
+    const data = await api('/' + room.code + '/tap', 'POST', token, {revision:room.revision, encounterId:q.id, ...batch});
+    if (roomEpoch !== epoch || tapQueue !== q) return;
+    q.flight = null;
+    acceptSnapshot(data);
+  } catch (error) {
+    if (roomEpoch !== epoch || tapQueue !== q) return;
+    if (error.status >= 400 && error.status < 500) q.flight = null;
+    q.retryAt = Date.now() + 200;
+    void pollRoom();
+  } finally {
+    q.sending = false;
+    if (roomEpoch === epoch && tapQueue === q) { paintEncounter(); if (q.queued) void flushTapQueue(); }
+  }
+}
+
 function runBot() {
-  if (mode !== 'bot' || outcome || game.turn === side || worker) return;
+  if (mode !== 'bot' || encounter || outcome || game.turn === side || worker) return;
   const id = ++job;
   const fail = () => {
     if (id !== job) return;
@@ -192,6 +335,9 @@ function choosePromotion(options) {
 
 function selectSquare(index) {
   roving = index;
+  if (encounter?.phase === 'counter' && encounter.caster !== side && !busy && clock() < encounter.deadline) {
+    prediction = index; drawBoard(); paintEncounter(); return;
+  }
   if (!mine()) return;
   const piece = game.board[index];
   const targets = selected == null ? [] : moves.filter(move =>
@@ -244,10 +390,15 @@ function drawBoard() {
     if (armed && selected == null && moves.some(move => move.from === i && move.power === technique)) cls.push('caster');
     if (checked && piece?.toLowerCase() === 'k' && sideOf(piece) === game.turn) cls.push('check');
     if (domain && Math.max(Math.abs((domain.center >> 3) - row), Math.abs(domain.center % 8 - col)) === 1) cls.push('seal');
+    if (game.shield?.square === i) cls.push('aegis');
+    if (encounter?.phase === 'duel' && encounter.to === i) cls.push('tribunal-target');
+    const guessing = encounter?.phase === 'counter' && encounter.caster !== side;
+    if (guessing) cls.push('forecast-choice');
+    if (guessing && prediction === i) cls.push('forecast-selected');
     if (flash === i) cls.push('flash');
-    const label = coord(i) + (piece ? ' ' + sideName(sideOf(piece)) + ' ' + names[piece.toLowerCase()] : ' empty') + (target ? ' · legal destination' : '');
+    const label = coord(i) + (piece ? ' ' + sideName(sideOf(piece)) + ' ' + names[piece.toLowerCase()] : ' empty') + (target ? ' · legal destination' : '') + (guessing && prediction === i ? ' · selected prediction' : '') + (game.shield?.square === i ? ' · shielded' : '');
     return '<button class="' + cls.join(' ') + '" tabindex="' + (roving === i ? 0 : -1) +
-      '" aria-label="' + label + '" aria-pressed="' + (i === selected) + '" data-square="' + i + '">' +
+      '" aria-label="' + label + '" aria-pressed="' + (i === selected || (guessing && prediction === i)) + '" data-square="' + i + '">' +
       (piece ? sprite(piece, 'piece') : '') + '</button>';
   }).join('');
   el('files').innerHTML = [...(flipped ? 'hgfedcba' : 'abcdefgh')].map(f => '<span>' + f + '</span>').join('');
@@ -276,9 +427,13 @@ function drawPlayer(id, color) {
   const identity = self ? 'You' : mode === 'bot' ? 'The Oracle' : room?.ready ? 'Challenger' : 'Open seat';
   const charge = game.energy[color];
   const pips = [0,1,2].map(i => '<i class="pip ' + (i < charge ? 'full' : '') + '"></i>').join('');
+  const counters = game.counters?.[color] ?? 2;
+  const resource = '<div class="energy" aria-label="' + charge + ' charges remaining"><span>CHARGES</span>' + pips + '</div>';
+  const hiddenCast = encounter?.phase === 'counter' && encounter.caster !== side;
   el(id).innerHTML = '<div class="player-crest">' + icon(self ? 'rift' : mode === 'bot' ? 'cpu' : 'shield') +
     '</div><div class="player-info"><strong>' + identity + '</strong><small>' + sideName(color).toUpperCase() +
-    ' PIECES</small></div><div class="energy" aria-label="' + charge + ' charges remaining"><span>CHARGES</span>' + pips + '</div>';
+    ' PIECES</small></div><span class="counters" title="Counter seals remaining">' + counters + '/2 counters</span>' +
+    (hiddenCast ? '' : resource);
 }
 function drawDeck() {
   el('tech-tabs').innerHTML = Object.keys(names).map(type => {
@@ -315,6 +470,10 @@ function drawStatus() {
     message = 'Connection interrupted. Reconnecting…'; warning = true;
   } else if (mode === 'room' && !room.ready) {
     message = 'Waiting for a friend to join.'; action = ['Copy invite', copyInvite];
+  } else if (encounter) {
+    message = encounter.phase === 'counter' ? (side === encounter.caster ?
+      'Your cast is sealed. Waiting for a response.' : 'Choose one board square to predict, or pass above.') :
+      'Royal Tribunal · use the encounter controls above the board.';
   } else if (botError) {
     message = 'The bot could not finish its turn.';
     action = ['Retry bot', () => { botError = false; runBot(); }];
@@ -365,7 +524,9 @@ function render() {
   drawBoard();
   drawPlayer('north', flipped ? 'w' : 'b');
   drawPlayer('south', flipped ? 'b' : 'w');
-  drawDeck(); drawStatus(); drawLog();
+  const deck = el('tech-tabs').closest('.tech');
+  if (deck) deck.hidden = encounter?.phase === 'counter' && side !== encounter.caster;
+  drawDeck(); drawStatus(); drawLog(); paintEncounter();
   const online = mode === 'room';
   el('board-mode').textContent = online ? 'ROOM DUEL' : 'BOT DUEL';
   el('profile-name').textContent = online ? 'Challenger' : 'The Oracle';
@@ -410,6 +571,7 @@ function randomToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join('');
 }
 async function api(path, method, seat, body) {
+  const sentAt = Date.now();
   const response = await fetch('/api/rooms' + path, {
     method, cache: 'no-store',
     headers: {'Content-Type':'application/json', Authorization:'Bearer ' + seat},
@@ -417,7 +579,12 @@ async function api(path, method, seat, body) {
     signal: AbortSignal.timeout(12000),
   });
   const data = await response.json().catch(() => ({error:'The room service is unavailable. Try again.'}));
-  if (!response.ok || !data.state) throw new Error(data.error || 'Room request failed.');
+  if (!response.ok || !data.state) {
+    const err = new Error(data.error || 'Room request failed.');
+    err.status = response.status; throw err;
+  }
+  const receivedAt = Date.now();
+  data.clockOffset = Number.isFinite(data.serverNow) ? data.serverNow - receivedAt + Math.min(500, (receivedAt - sentAt) / 2) : 0;
   return data;
 }
 function acceptSnapshot(data, fresh = false) {
@@ -425,15 +592,12 @@ function acceptSnapshot(data, fresh = false) {
     if (offline) { offline = false; render(); }
     return;
   }
-  const previous = log.length;
-  room = data; game = data.state; side = data.side; log = data.log; outcome = data.outcome;
-  resetSelection(); offline = false;
-  if (fresh) { flipped = side === 'b'; technique = 'n'; }
-  if (!fresh && previous < log.length) {
-    const move = log.at(-1);
-    notePower(move, move.side); ping(!!move.power);
-  }
-  refreshGame();
+  const wasOffline = offline, seatJoined = room?.ready !== data.ready;
+  room = data; side = data.side; offline = false; clockOffset = data.clockOffset;
+  if (fresh) { flipped = side === 'b'; technique = 'n'; tapQueue = null; }
+  displayMatch(data, fresh);
+  if (seatJoined && !fresh) render();
+  else if (wasOffline) drawStatus();
 }
 function friendModal(invite = '') {
   const description = invite ? 'Your friend invited you to sit across the board.' :
@@ -517,7 +681,7 @@ async function pollRoom() {
 }
 async function roomAction(action, extra = {}) {
   if (mode !== 'room' || !room || busy) return;
-  busy = true;
+  busy = true; paintEncounter();
   const epoch = roomEpoch, code = room.code;
   drawStatus(); drawDeck();
   try {
@@ -538,20 +702,33 @@ el('resign').onclick = () => {
   el('cancel-resign').onclick = hide;
   el('confirm-resign').onclick = () => { hide(); void roomAction('resign'); };
 };
-setInterval(() => { if (!document.hidden) void pollRoom(); }, 1400);
+setInterval(() => {
+  if (document.hidden) return;
+  const now = Date.now();
+  if (mode === 'bot' && encounter) tickSolo(now);
+  if (mode !== 'room') return;
+  if (encounter) { paintEncounter(); void flushTapQueue(); }
+  const cadence = encounter ? 400 : 1400;
+  if (now - lastPollAt >= cadence) { lastPollAt = now; void pollRoom(); }
+}, 90);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void pollRoom(); });
 
 function restoreSolo() {
   const saved = storage.read('solo');
-  if (!saved || !Array.isArray(saved.log) || !['w','b'].includes(saved.side) || !Object.hasOwn(levels, saved.level)) return;
+  if (!saved || !['w','b'].includes(saved.side) || !Object.hasOwn(levels, saved.level)) return;
   try {
-    legalMoves(saved.game);
-    game = saved.game; log = saved.log; side = saved.side;
-    level = saved.level; outcome = saved.outcome || null; flipped = side === 'b';
+    const old = saved.match || {state:saved.game, log:saved.log, outcome:saved.outcome};
+    if (!old.state || !Array.isArray(old.log)) return;
+    const migrated = {...createMatch(old.state), encounter:old.encounter ?? null, log:old.log, outcome:old.outcome ?? null};
+    legalMoves(migrated.state);
+    solo = migrated;
+    game = solo.state; log = solo.log; side = saved.side; outcome = solo.outcome;
+    encounter = viewMatch(solo, Date.now()).encounter; botPlan = saved.botPlan ?? null;
+    level = saved.level; flipped = side === 'b';
   } catch { /* Ignore an invalid local save and start a fresh duel. */ }
 }
 async function boot() {
-  soundButton(); restoreSolo(); refreshGame();
+  soundButton(); restoreSolo(); refreshGame(); if (encounter) tickSolo(Date.now());
   const code = new URL(location.href).searchParams.get('room')?.trim().toUpperCase();
   if (code) {
     friendModal(code);

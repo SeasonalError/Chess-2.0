@@ -8,6 +8,12 @@ export const MAX_BATCH = 4;
 export const TAPS_PER_SECOND = 12;
 const other = side => side === 'w' ? 'b' : 'w';
 
+function newEncounterId() {
+  // getRandomValues also works when playing a local game over a LAN HTTP URL.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export class EncounterError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -72,7 +78,7 @@ export function moveMatch(match, side, input, now, id) {
   requireThat(move, 400, 'That move is illegal in this position.');
   if (!move.power) return finish(match, playLegal(match.state, move), entry(match.state, move));
   const pending = {...match, encounter: {
-    id: id ?? crypto.randomUUID(), phase: 'counter', caster: side, deadline: now + COUNTER_MS, move,
+    id: id ?? newEncounterId(), phase: 'counter', caster: side, deadline: now + COUNTER_MS, move,
   }};
   return match.state.counters[other(side)] ? pending : answerCounter(pending, null, now);
 }

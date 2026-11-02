@@ -7,6 +7,7 @@ import {
   COUNTER_MS, MAX_BATCH,
 } from './encounter.js';
 import {chooseCounterSquare, chooseDraftCard, duelTapSchedule} from './bot.js';
+import {roomApiBase} from './hosting.js';
 import {createEncounterPanel} from './arena-encounter-ui.js';
 import {createWildcardPanels, wildcardInstruction} from './arena-wildcards-ui.js';
 
@@ -667,7 +668,7 @@ function randomToken() {
 }
 async function api(path, method, seat, body) {
   const sentAt = Date.now();
-  const response = await fetch('/api/rooms' + path, {
+  const response = await fetch(roomApiBase(location.origin) + path, {
     method, cache: 'no-store',
     headers: {'Content-Type':'application/json', Authorization:'Bearer ' + seat},
     ...(body ? {body:JSON.stringify(body)} : {}),

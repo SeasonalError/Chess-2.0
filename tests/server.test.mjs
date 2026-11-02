@@ -58,3 +58,23 @@ test('standalone HTTP arena keeps a cast secret, resolves a pass and synchronize
   assert.equal(update.state.board[28], 'p');
   assert.equal(update.log.length, 2);
 });
+
+test('Pages uses the hosted room API with authorization preflights and readable errors', async () => {
+  const {pagesOrigin, roomApiBase} = await import('../public/game/hosting.js');
+  const {handleRoomRequest} = await import('../lib/rooms.js');
+  const url = roomApiBase(pagesOrigin) + '/AAAAAAAAAA';
+  assert.equal(new URL(url).origin, 'https://riftbound-chess-arena.nimeesh16-2007.chatgpt.site');
+  assert.equal(roomApiBase('http://localhost:3000'), '/api/rooms');
+  const preflight = origin => handleRoomRequest(null, new Request(url, {method:'OPTIONS', headers:{
+    Origin:origin, 'Access-Control-Request-Method':'GET', 'Access-Control-Request-Headers':'authorization,content-type',
+  }}));
+  const allowed = await preflight(pagesOrigin);
+  assert.equal(allowed.status, 204);
+  assert.equal(allowed.headers.get('Access-Control-Allow-Origin'), pagesOrigin);
+  assert.match(allowed.headers.get('Access-Control-Allow-Headers'), /Authorization/i);
+  const denied = await preflight('https://example.net');
+  assert.equal(denied.headers.get('Access-Control-Allow-Origin'), null);
+  const invalidSeat = await handleRoomRequest(null, new Request(url, {headers:{Origin:pagesOrigin}}));
+  assert.equal(invalidSeat.status, 403);
+  assert.equal(invalidSeat.headers.get('Access-Control-Allow-Origin'), pagesOrigin);
+});

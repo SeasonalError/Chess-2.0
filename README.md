@@ -1,6 +1,6 @@
 # Riftbound · Chess 2.0
 
-**[Play Riftbound](https://riftbound-chess-arena.nimeesh16-2007.chatgpt.site/)**
+**[Play Riftbound on GitHub Pages](https://seasonalerror.github.io/Chess-2.0/)** · [Alternate arena](https://riftbound-chess-arena.nimeesh16-2007.chatgpt.site/)
 
 Riftbound is a chess variant with a private wildcard draft, six hidden techniques, a ten-second tap duel, a tactical bot and two-player rooms. Win by checkmate.
 
@@ -66,6 +66,12 @@ node server.mjs
 Open `http://localhost:3000`. On the same Wi-Fi, both players can use the host computer’s LAN address on port 3000. For internet play, use the hosted arena or deploy this server on an HTTPS-capable host. Generate the invite from the address your friend can reach.
 
 The server accepts `HOST`, `PORT` and `ROOM_DB`. Rooms persist in `data/rooms.sqlite` by default. Mount that path on persistent storage when self-hosting. The hosted Worker runs the same room handler with D1.
+
+## GitHub Pages
+
+The `gh-pages` branch serves the contents of `public/`, with `arena.html` also published as `index.html`. Solo runs in the browser. Friend rooms use the same hosted room server as the alternate arena. Invite links keep the address where the room was created.
+
+To update the published branch, copy the contents of `public/` from the new revision, copy `arena.html` to `index.html`, retain the empty `.nojekyll` file, and push to `gh-pages`.
 
 ## Engine and tests
 
